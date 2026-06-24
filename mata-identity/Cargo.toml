@@ -1,0 +1,50 @@
+[package]
+name = "mata-identity"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Remade-With-Rust/mid"
+edition = "2021"
+description = "User-owned identity keypairs for MATA. Phase 1 of the MATA KMS / sovereign identity platform."
+
+[dependencies]
+# ECDSA P-256 — matches WebAuthn, already used throughout dioxus-webauthn.
+# Pure Rust, compiles on native + wasm32 + mobile without WebCrypto.
+# `ecdh` feature added in M3-Structural (D.1) for the shared-secret primitive
+# that powers HPKE in `mata-messaging`. Same curve, same crate, no extra deps.
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "ecdh", "std", "serde"] }
+# OS randomness for key generation (same crate + version dioxus-webauthn uses).
+getrandom = "0.3"
+# JWK serialization for storing the public key as JSON.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+# M2: HKDF-SHA256 for subordinate-key derivation (e.g. #encryption from vault key).
+hkdf = "0.12"
+sha2 = "0.10"
+# M2: RFC 8785 JSON Canonicalization Scheme — needed so DID documents hash
+# identically regardless of key ordering before being signed.
+serde_jcs = "0.1"
+# M2: DID document timestamps (issued/expires/updated).
+# `wasmbind` is essential — without it, `chrono::Utc::now()` falls
+# through to `std::time::SystemTime::now()` which panics on
+# `wasm32-unknown-unknown` ("time not implemented on this platform").
+# With it, chrono pulls timestamps from `js_sys::Date::now()` instead.
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "wasmbind"] }
+# M2: did:mata:<uuid> identifiers. The crate consumes UUIDs that the caller
+# already has (Supabase auth.users.id) — we never generate one — so we don't
+# need `v4` and avoid the wasm randomness-feature dance.
+uuid = { version = "1", features = ["serde"] }
+# M4: base58btc encoding for entity DIDs (`did:mata:entity:<base58(pubkey)>`),
+# matching the per-company banking DID format. Same `bs58` crate the wallet uses.
+bs58 = "0.5"
+
+# WASM target needs getrandom's wasm_js feature so it can pull entropy from
+# crypto.getRandomValues() in the browser.
+#
+# We also have to enable the `js` feature on the *transitive* getrandom 0.2
+# that p256 -> ecdsa -> elliptic-curve -> rand_core pulls in, otherwise the
+# wasm32-unknown-unknown target fails to compile ("the wasm*-unknown-unknown
+# targets are not supported by default, you may need to enable the js feature").
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }

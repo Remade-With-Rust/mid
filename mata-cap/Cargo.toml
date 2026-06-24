@@ -1,0 +1,14 @@
+[package]
+name = "mata-cap"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Remade-With-Rust/mid"
+edition = "2021"
+description = "The shared mID capability/authorization foundation for MATA's API-first control-plane tools (Maestro, Iron Bank, …). One `Capability`/`Caller`/`authorize` model so every isolated service gates the same way — `did:mata` identity (verified by kms-verifier at the edge) → scoped capabilities → typed `authorize` chokepoint. Dependency-light (serde + thiserror)."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"

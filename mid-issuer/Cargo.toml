@@ -1,0 +1,47 @@
+[package]
+name = "mid-issuer"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Remade-With-Rust/mid"
+edition = "2021"
+description = "mID JWT issuer — wallet-side. Mints self-issued sign-in tokens per ADR 0005 Decision 1. Phase 0 of the mID Mission."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# Shared envelope types (RosterUpdate, signing primitives) reused by mID's
+# embedded_roster_chain entries. mID does not extend these types — it bundles
+# already-produced RosterUpdate envelopes into the response.
+kms-types = { path = "../kms-types", version = "0.1.0" }
+
+# Provides the DeviceSigner trait for the JWS outer signature. The actual
+# signing key is platform-specific (Secure Enclave on iOS, StrongBox on
+# Android, vault-loaded software key in the extension) and lives in
+# packages/ui. This crate only depends on the trait, never the impl.
+kms-client = { path = "../kms-client", version = "0.1.0" }
+
+# JSON serialization. The mID JWT payload is JSON-based per RFC 7519.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# base64url (no padding) — the JWS compact-form encoding per RFC 7515 §3.
+base64 = "0.22"
+
+# SHA-256 of the JWS signing input (header.payload) before passing to
+# DeviceSigner::sign_prehash. JWS ES256 (RFC 7518 §3.4) specifies SHA-256.
+sha2 = "0.10"
+
+# Typed error variants per ADR 0005.
+thiserror = "1"
+
+[dev-dependencies]
+# Round-trip tests use pretty-printed JSON for readable failures.
+serde_json = "1"
+# In-memory signer for tests (ships with kms-client as a test helper).
+kms-client = { path = "../kms-client", version = "0.1.0" }
+# p256 directly so tests can construct a SigningKey from a deterministic
+# seed (kms-client's InMemoryDeviceSigner::generate convenience method has
+# a pre-existing dep-resolution issue; using `new` with an explicit key
+# sidesteps it and gives reproducible signatures.)
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }

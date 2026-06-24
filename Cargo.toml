@@ -1,0 +1,5 @@
+# MATA mID — sovereign, self-issued identity for Rust. Open source, MIT OR Apache-2.0.
+# Embed it locally for free; the JS/npm side is @matanetwork/sovereign-id.
+[workspace]
+resolver = "2"
+members = ["kms-types","kms-verifier","kms-client","mid-issuer","mid-verify","mata-sign","mata-identity","mata-cap"]

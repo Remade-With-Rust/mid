@@ -1,0 +1,50 @@
+[package]
+name = "kms-verifier"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Remade-With-Rust/mid"
+edition = "2021"
+description = "MATA KMS sovereign-auth verification engine. Phase 2 of the Phase 1 Wallet Overhaul Mission. Used by kms-banking-proxy today; will be reused unchanged by the future kms-oidc-adapter."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# Shared envelope types — every other kms-* crate depends on this.
+kms-types = { path = "../kms-types", version = "0.1.0" }
+
+# ECDSA P-256 signature verification. Same primitive used by `mata-identity`
+# for M5 device signing keys — the verifier accepts the keys the existing
+# rotation infrastructure already manages.
+#
+# Features:
+# - `ecdsa` for the ECDSA API.
+# - `std` for `std::error::Error` impls on the error types.
+# - prehash verify (`PrehashVerifier` trait) is in the default ecdsa surface.
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+
+# Async traits (NonceStore, DidResolver) — the verifier is consumed from
+# axum handlers in kms-banking-proxy.
+async-trait = "0.1"
+
+# Reused for the test/dev in-memory NonceStore + DidResolver helpers (also
+# usable by callers as a first-cut production impl on a single instance).
+tokio = { version = "1", default-features = false, features = ["sync"] }
+
+# Cryptographically-random nonce bytes for the default NonceGenerator.
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+[dev-dependencies]
+# Test runtime.
+tokio = { version = "1", features = ["rt", "macros", "sync"] }
+# Tests need key generation + signing.
+p256 = { version = "0.13", features = ["ecdsa", "std"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+# wasm32 needs the older getrandom 0.2 (pulled by rand_core 0.6 → p256 0.13)
+# enabled with the `js` feature so it can pull entropy from crypto.getRandomValues().
+# Same dance mata-identity does. Without this, kms-client's wasm build fails when
+# it pulls kms-verifier in for the shared types — even though SystemNonceGenerator
+# isn't actually used on wasm (clients inject their own generator).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }

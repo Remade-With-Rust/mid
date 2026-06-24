@@ -1,0 +1,51 @@
+[package]
+name = "kms-client"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Remade-With-Rust/mid"
+edition = "2021"
+description = "Client-side helpers for MATA KMS sovereign-auth — signs assertions with the device's M5 signing key and round-trips the verifier's /v1/nonce endpoint. Phase 3 of the Phase 1 Wallet Overhaul Mission. wasm32 + native."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# Shared envelope types.
+kms-types = { path = "../kms-types", version = "0.1.0" }
+
+# ECDSA P-256 — same primitive as kms-verifier and the existing M5 keys
+# managed by `mata-identity` / `mata-sync`.
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+
+# HTTP client. wasm32-target requests are routed through the browser's fetch
+# API automatically; native targets use rustls. Defaults disabled so we
+# explicitly opt into the feature set we want.
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+
+# JSON serde for the request/response bodies.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Typed client errors.
+thiserror = "1"
+
+# OS randomness for the `InMemoryDeviceSigner::generate` test helper. The
+# trait `DeviceSigner` itself never touches the RNG; this is only for the
+# helper that callers can opt out of by constructing a SigningKey themselves.
+rand_core = { version = "0.6", features = ["getrandom"] }
+
+# wasm32 needs the older getrandom 0.2 (pulled by rand_core 0.6 → p256 0.13)
+# enabled with the `js` feature so it can pull entropy from crypto.getRandomValues().
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+
+# Native gets rustls + tokio runtime via reqwest.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[dev-dependencies]
+# Integration test: kms-client signs, kms-verifier verifies. End-to-end
+# proof the two crates agree on the wire format and signing rules.
+kms-verifier = { path = "../kms-verifier", version = "0.1.0" }
+tokio = { version = "1", features = ["rt", "macros", "sync"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
