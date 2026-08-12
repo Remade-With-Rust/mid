@@ -180,6 +180,7 @@ fn expired_statement_is_rejected() {
         nonce: None,
         exp: Some(1_716_700_500),
         preview: None,
+        platform_binding: None,
     };
     let token = sign_statement(&input, &snapshot, &signer, 1_716_700_000).unwrap();
 
@@ -216,6 +217,7 @@ fn context_binding_is_enforced() {
         nonce: None,
         exp: None,
         preview: Some("post body".into()),
+        platform_binding: None,
     };
     let token = sign_statement(&input, &snapshot, &signer, 1_716_700_000).unwrap();
 
@@ -243,6 +245,7 @@ fn nonce_binding_is_enforced() {
         nonce: Some("nonce-123".into()),
         exp: None,
         preview: None,
+        platform_binding: None,
     };
     let token = sign_statement(&input, &snapshot, &signer, 1_716_700_000).unwrap();
 
@@ -269,6 +272,7 @@ fn precomputed_hash_matches_bytes_hash() {
             nonce: None,
             exp: None,
             preview: None,
+            platform_binding: None,
         },
         &snapshot,
         &signer,
@@ -370,6 +374,7 @@ fn sign_single_device_round_trips_without_a_prebuilt_snapshot() {
             nonce: None,
             exp: None,
             preview: None,
+            platform_binding: None,
         },
         &signer,
         1_716_700_000,
@@ -399,4 +404,65 @@ fn signer_not_in_head_roster_fails_at_sign_time() {
     )
     .unwrap_err();
     assert!(matches!(err, mata_sign::SignError::InconsistentSnapshot(_)), "got {err:?}");
+}
+
+// ─── S1 platform binding (docs/iamhuman/s1-platform-binding.md) ──────────────
+
+#[test]
+fn platform_binding_round_trips() {
+    let (snapshot, signer, _) = genesis_identity("alice", "laptop");
+    let input = StatementInput {
+        content: Content::Bytes(b"hello from a bound post"),
+        content_type: "text/plain".into(),
+        context: Some("iamhuman".into()),
+        nonce: None,
+        exp: None,
+        preview: None,
+        platform_binding: Some(mata_sign::PlatformBinding {
+            platform: "x.com".into(),
+            author_handle: Some("farmer_timmm".into()),
+            author_id: Some("1234567890".into()),
+        }),
+    };
+    let token = sign_statement(&input, &snapshot, &signer, 1_716_700_000).unwrap();
+
+    let v = verify_statement(&token, &opts(1_716_700_100)).unwrap();
+    let b = v.platform_binding.expect("binding survives sign→verify");
+    assert_eq!(b.platform, "x.com");
+    assert_eq!(b.author_handle.as_deref(), Some("farmer_timmm"));
+    assert_eq!(b.author_id.as_deref(), Some("1234567890"));
+    // The binding is covered by the signature: flip the platform in the payload
+    // and the JWS check must fail.
+    let mut parts: Vec<String> = token.split('.').map(String::from).collect();
+    let payload = URL_SAFE_NO_PAD.decode(&parts[1]).unwrap();
+    let tampered = String::from_utf8(payload).unwrap().replace("x.com", "evil.example");
+    parts[1] = URL_SAFE_NO_PAD.encode(tampered.as_bytes());
+    let forged = parts.join(".");
+    let err = verify_statement(&forged, &opts(1_716_700_100)).unwrap_err();
+    assert!(matches!(err, VerifyError::Crypto(_)), "got {err:?}");
+}
+
+#[test]
+fn absent_platform_binding_is_wire_identical() {
+    // Backward-compat guarantee: a bindingless statement serializes with NO
+    // `platform_binding` key at all — byte-identical envelope shape to pre-S1
+    // tokens, so document/claim/blob signatures and old verifiers never see
+    // the field.
+    let (snapshot, signer, _) = genesis_identity("alice", "laptop");
+    let token = sign_statement(
+        &StatementInput::bytes(b"plain statement", "text/plain"),
+        &snapshot,
+        &signer,
+        1_716_700_000,
+    )
+    .unwrap();
+
+    let payload_b64 = token.split('.').nth(1).unwrap();
+    let payload = String::from_utf8(URL_SAFE_NO_PAD.decode(payload_b64).unwrap()).unwrap();
+    assert!(
+        !payload.contains("platform_binding"),
+        "bindingless payload must not carry the key: {payload}"
+    );
+    let v = verify_statement(&token, &opts(1_716_700_100)).unwrap();
+    assert!(v.platform_binding.is_none());
 }

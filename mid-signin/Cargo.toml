@@ -1,0 +1,61 @@
+[package]
+name = "mid-signin"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Remade-With-Rust/mid"
+readme = "README.md"
+keywords = ["identity", "authentication", "did", "jwt", "mid"]
+categories = ["authentication", "web-programming"]
+description = "The drop-in Relying-Party kit for Sign in with MATA (mID). Wraps mid-verify's pure cryptography with the RP duties the verifier leaves open — single-use nonce enforcement, genesis-anchor + rollback persistence, session production — plus an embedded zero-schema store and ready-made axum routes."
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+# Ready-made `POST /auth/mid/nonce` + `POST /auth/mid/verify` axum routes.
+routes = ["dep:axum"]
+# Embedded single-file persistent store (pure-Rust redb — the spacedb-store
+# engine). Zero schema work: nonces + anchors survive restarts.
+redb-store = ["dep:redb"]
+
+[dependencies]
+# The canonical verifier. This crate NEVER re-implements any check —
+# it composes verify_mid_response with the stateful RP duties.
+mid-verify = { path = "../mid-verify", version = "0.1.0" }
+
+# base64url payload peek (extracting the echoed nonce before verification)
+# uses the same engine/alphabet as the JWS itself.
+base64 = "0.22"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+
+# OS randomness for nonce issuance (32 bytes → hex).
+getrandom = "0.3"
+
+# `routes` feature — the HTTP boundary. Kept out of the default build so
+# the core stays dependency-light and clock-pure.
+axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio"], optional = true }
+
+# `redb-store` feature — embedded pure-Rust store, same engine spacedb-store
+# uses. One file, two tables, no schema migration for adopters.
+redb = { version = "2", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[dev-dependencies]
+# Test fixtures mint REAL mID JWTs through the wallet-side issuer and the
+# in-memory device signer — the same pattern mid-verify's own tests use —
+# so every test exercises the genuine end-to-end artifact, not a mock.
+mid-issuer = { path = "../mid-issuer", version = "0.1.0" }
+kms-client = { path = "../kms-client", version = "0.1.0" }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+tempfile = "3"

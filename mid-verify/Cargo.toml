@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Remade-With-Rust/mid"
+readme = "README.md"
+keywords = ["identity", "authentication", "did", "jwt", "mid"]
+categories = ["authentication", "cryptography"]
 description = "mID JWT verifier — RP-side. Runs the four-step verification (genesis self-sig → roster chain → head VM → JWS signature) entirely locally per ADR 0005 Decision 1. Zero runtime calls to MATA infrastructure. Phase 0 of the mID Mission."
 
 [lib]

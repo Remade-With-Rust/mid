@@ -72,6 +72,29 @@ pub use mid_issuer::DeviceSigner;
 
 // ─── The signed envelope ─────────────────────────────────────────────────────
 
+/// S1 platform binding — ties a statement to *where* and *as which account* it
+/// was signed for posting (frozen in
+/// `docs/iamhuman/s1-platform-binding.md`).
+///
+/// The binding is **claimed by the signer** at sign time (the site adapter
+/// reads the logged-in page); the signature makes the claim non-repudiable,
+/// and platform-side observation (account-linking evidence) corroborates it.
+/// A verifier should render it as "signed for posting on {platform} as
+/// @{handle}", never "posted by @{handle}".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlatformBinding {
+    /// Normalized platform host, e.g. `"x.com"` (adapters map aliases such as
+    /// `twitter.com` onto one canonical value). Lowercase registrable host —
+    /// no scheme, no path.
+    pub platform: String,
+    /// The account's display handle without `@`, if the adapter could read it.
+    pub author_handle: Option<String>,
+    /// The platform's **immutable** account id (e.g. X's numeric `rest_id`),
+    /// if available. Handles rename and get recycled; this doesn't — a
+    /// verifier should prefer it over `author_handle` when both are present.
+    pub author_id: Option<String>,
+}
+
 /// The JSON payload of a signed statement — the JWS second segment.
 ///
 /// Generalizes [`mid_issuer::MidJwtPayload`]: it keeps the three identity-proof
@@ -103,6 +126,12 @@ pub struct SignedStatement {
     /// renderer can show the message without fetching it separately. Never
     /// required for verification — the hash is authoritative.
     pub content_preview: Option<String>,
+    /// Optional S1 platform binding — where / as which account this content
+    /// was signed for posting. Absent (and absent from the serialized payload)
+    /// for non-platform statements, so pre-S1 tokens and document/claim/blob
+    /// signatures are byte-identical to before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform_binding: Option<PlatformBinding>,
     /// Self-signed genesis roster (signed by the key encoded in the DID).
     pub embedded_genesis_roster: EmbeddedGenesisRoster,
     /// Chain of wallet-signed roster mutations from genesis to current.
@@ -147,6 +176,8 @@ pub struct StatementInput<'a> {
     /// Optional short-text preview to inline (see
     /// [`SignedStatement::content_preview`]).
     pub preview: Option<String>,
+    /// Optional S1 platform binding (see [`SignedStatement::platform_binding`]).
+    pub platform_binding: Option<PlatformBinding>,
 }
 
 impl<'a> StatementInput<'a> {
@@ -159,6 +190,7 @@ impl<'a> StatementInput<'a> {
             nonce: None,
             exp: None,
             preview: None,
+            platform_binding: None,
         }
     }
 }
@@ -267,6 +299,7 @@ pub fn sign_statement(
         content_type: input.content_type.clone(),
         content_hash: URL_SAFE_NO_PAD.encode(input.content.digest()),
         content_preview: input.preview.clone(),
+        platform_binding: input.platform_binding.clone(),
         embedded_genesis_roster: snapshot.genesis_roster.clone(),
         embedded_roster_chain: snapshot.roster_chain.clone(),
         embedded_verification_method: snapshot.current_verification_method.clone(),
@@ -349,6 +382,38 @@ fn head_vm_ids(snapshot: &IdentitySnapshot) -> Vec<String> {
     }
 }
 
+// ─── IAMHUMAN proof addressing ───────────────────────────────────────────────
+
+/// The content address (`post_id`) of an IAMHUMAN proof — frozen in
+/// `docs/iamhuman/s1-platform-binding.md`.
+///
+/// - Unbound (pre-S1 tokens, non-platform statements):
+///   `base58btc(SHA-256(text))`.
+/// - Platform-bound (S1):
+///   `base58btc(SHA-256("iamhuman/post/v2" ‖ 0x00 ‖ platform ‖ 0x00 ‖ text))`
+///   — domain-separated (a hostname cannot contain NUL), so the same text
+///   signed for two platforms is two distinct proofs. Platform only — the
+///   handle lives in the signature; handles rename, addresses must not.
+///
+/// This is a pure function shared by `iamhuman-host` (server-side addressing)
+/// and the extension background (local-first URL construction *before* the
+/// host round-trip) — one implementation, so the two can never drift.
+pub fn iamhuman_post_id(content: &str, platform: Option<&str>) -> String {
+    let digest = match platform {
+        Some(p) => {
+            let mut h = Sha256::new();
+            h.update(b"iamhuman/post/v2");
+            h.update([0u8]);
+            h.update(p.as_bytes());
+            h.update([0u8]);
+            h.update(content.as_bytes());
+            h.finalize()
+        }
+        None => Sha256::digest(content.as_bytes()),
+    };
+    bs58::encode(digest).into_string()
+}
+
 // ─── Verify ──────────────────────────────────────────────────────────────────
 
 /// Verifier-supplied policy for [`verify_statement`].
@@ -386,6 +451,9 @@ pub struct VerifiedStatement {
     pub context: Option<String>,
     /// The inlined short-text preview, if the signer included one.
     pub preview: Option<String>,
+    /// The S1 platform binding the signer claimed, if any — where / as which
+    /// account the content was signed for posting. Covered by the signature.
+    pub platform_binding: Option<PlatformBinding>,
 }
 
 impl VerifiedStatement {
@@ -486,5 +554,6 @@ pub fn verify_statement(token: &str, opts: &VerifyOptions) -> Result<VerifiedSta
         exp: stmt.exp,
         context: stmt.context,
         preview: stmt.content_preview,
+        platform_binding: stmt.platform_binding,
     })
 }

@@ -34,6 +34,11 @@ base64 = "0.22"
 # SHA-256 of the content being signed (detached model: we sign the hash).
 sha2 = "0.10"
 
+# base58btc encoding of the IAMHUMAN proof address (`iamhuman_post_id`) — the
+# same encoding DIDs use. Shared here so the host and the extension derive
+# byte-identical addresses from one implementation.
+bs58 = "0.5"
+
 # Typed error variants.
 thiserror = "1"
 

@@ -17,7 +17,8 @@ against it: free, forever. The crates depend on nothing proprietary.
 
 | Crate | What it's for |
 |---|---|
-| [`mid-verify`](mid-verify) | **RP-side verifier.** Four-step local verification (genesis self-sig → roster chain → head version → JWS) of an mID sign-in token. Pure function, no I/O. **Start here.** |
+| [`mid-signin`](mid-signin) | **The drop-in RP kit — start here for website sign-in.** Wraps `mid-verify` with the stateful RP duties (single-use nonces, genesis anchoring, rollback detection), an embedded zero-schema store (`redb-store`), and ready-made axum routes (`routes`). Ten lines to production sign-in. |
+| [`mid-verify`](mid-verify) | **RP-side verifier.** Four-step local verification (genesis self-sig → roster chain → head version → JWS) of an mID sign-in token. Pure function, no I/O. The cryptographic core `mid-signin` composes. |
 | [`mid-issuer`](mid-issuer) | **Wallet-side issuer.** Mints the self-issued sign-in JWT from an identity snapshot + the device signing key. |
 | [`mata-sign`](mata-sign) | Sign **arbitrary** content as a `did:mata`, verifiable offline by anyone — the primitive under document signing + IAMHUMAN post signing. |
 | [`mata-identity`](mata-identity) | User-owned identity keypairs (the `did:mata` root). |
@@ -26,7 +27,34 @@ against it: free, forever. The crates depend on nothing proprietary.
 | [`kms-verifier`](kms-verifier) | Sovereign-auth verification engine over those envelopes. |
 | [`kms-client`](kms-client) | Client-side: signs assertions with the device key, round-trips the verifier's nonce endpoint. `wasm32` + native. |
 
-## Quick start — verify a sign-in (the RP side)
+## Quick start — add "Sign in with MATA" to a website (the drop-in kit)
+
+```toml
+[dependencies]
+mid-signin = { version = "0.1", features = ["routes", "redb-store"] }
+```
+
+```rust,ignore
+use std::sync::Arc;
+use mid_signin::{routes, Authenticator, MidRp, MidRpConfig, RedbStore};
+
+// One file on disk — no schema, no migration. Nonces + anchors survive restarts.
+let store = Arc::new(RedbStore::open("mata-auth.redb")?);
+let rp = Arc::new(MidRp::new(
+    MidRpConfig::new("https://acme.com"),
+    Authenticator::new(store.clone(), store),
+));
+let app = axum::Router::new().merge(routes::router(rp));
+// POST /auth/mid/nonce  → {"nonce"}          (page passes it to signIn())
+// POST /auth/mid/verify → {"did", "claims"}  (page POSTs the wallet's JWT)
+```
+
+Pair it with [`@matanetwork/sovereign-id`](https://github.com/Remade-With-Rust/sovereign-id)
+on the page: `signIn({ rpOrigin, nonce, claims })` → POST the JWT back. That is the whole
+integration — replay defense, spoofing anchors, and stolen-device rollback detection
+included. See the crate README for custom-database trait impls and session-cookie hooks.
+
+## Quick start — verify a sign-in by hand (the cryptographic core)
 
 ```toml
 [dependencies]

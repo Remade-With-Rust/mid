@@ -75,6 +75,7 @@ fn main() {
         nonce: None,
         exp: None,
         preview: Some(username.clone()),
+        platform_binding: None,
     };
     let token = sign_statement(&input, &snapshot, &signer, 1_716_700_000).unwrap();
 
