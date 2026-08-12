@@ -109,6 +109,31 @@ Suggested columns on your `users` table: `did TEXT PRIMARY KEY`,
 with `WHERE genesis_roster_hash = $presented` — a mismatch is an attack, not a
 conflict.
 
+## Native-app RPs: use a loopback callback page, not a custom URL scheme
+
+On desktop, users without the browser extension sign in via the MATA **native
+app**: your RP deep-links `mata-mid://request?payload=…` and the wallet
+returns the token by opening your `callback` URL. Two hard-won rules:
+
+1. **Don't use a custom scheme (`myapp://…`) as the callback unless you ship
+   a real OS bundle.** On macOS only a bundled `.app` (with
+   `CFBundleURLTypes` in its Info.plist) can register a scheme with
+   LaunchServices — a bare binary cannot, and the wallet's callback then
+   dies silently *after* the user approved. Windows needs the equivalent
+   HKCU registration.
+2. **The portable answer is a loopback HTTP page.** Set
+   `callback: "http://127.0.0.1:<your-port>/auth/mid/callback"` and serve a
+   tiny page there that reads `location.hash` (`#mid_response=<base64url>`),
+   extracts the token, and POSTs it to your verify endpoint on the same
+   loopback address. The token rides the URL *fragment*, which browsers
+   never transmit in the HTTP request, and loopback never leaves the
+   machine. Your app polls its own session endpoint until sign-in lands.
+   One brief browser hop, zero registration, works from any binary.
+
+The deep link itself is best dispatched via the OS launcher (`open` /
+`ShellExecuteW` / `xdg-open`), not by navigating a webview — webviews may
+cancel top-level navigations to custom schemes.
+
 ## What this crate never does
 
 - **Re-implement verification.** Every cryptographic check is
