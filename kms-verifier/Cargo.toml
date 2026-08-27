@@ -1,6 +1,6 @@
 [package]
 name = "kms-verifier"
-version = "0.1.0"
+version = "0.2.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Remade-With-Rust/mid"
 edition = "2021"
@@ -11,7 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 # Shared envelope types — every other kms-* crate depends on this.
-kms-types = { path = "../kms-types", version = "0.1.0" }
+kms-types = { path = "../kms-types", version = "0.2.0" }
 
 # ECDSA P-256 signature verification. Same primitive used by `mata-identity`
 # for M5 device signing keys — the verifier accepts the keys the existing

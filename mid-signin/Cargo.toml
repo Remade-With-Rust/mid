@@ -1,6 +1,6 @@
 [package]
 name = "mid-signin"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Remade-With-Rust/mid"
@@ -23,7 +23,7 @@ redb-store = ["dep:redb"]
 [dependencies]
 # The canonical verifier. This crate NEVER re-implements any check —
 # it composes verify_mid_response with the stateful RP duties.
-mid-verify = { path = "../mid-verify", version = "0.1.0" }
+mid-verify = { path = "../mid-verify", version = "0.2.0" }
 
 # base64url payload peek (extracting the echoed nonce before verification)
 # uses the same engine/alphabet as the JWS itself.
@@ -51,8 +51,8 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 # Test fixtures mint REAL mID JWTs through the wallet-side issuer and the
 # in-memory device signer — the same pattern mid-verify's own tests use —
 # so every test exercises the genuine end-to-end artifact, not a mock.
-mid-issuer = { path = "../mid-issuer", version = "0.1.0" }
-kms-client = { path = "../kms-client", version = "0.1.0" }
+mid-issuer = { path = "../mid-issuer", version = "0.2.0" }
+kms-client = { path = "../kms-client", version = "0.2.0" }
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
 sha2 = "0.10"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

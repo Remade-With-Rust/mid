@@ -1,6 +1,6 @@
 [package]
 name = "mid-verify"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Remade-With-Rust/mid"
@@ -17,7 +17,7 @@ crate-type = ["rlib"]
 # rosters. The wallet (via mid-issuer) and this crate both consume the
 # same canonical_bytes module — single source of truth for the signing
 # form.
-mid-issuer = { path = "../mid-issuer", version = "0.1.0" }
+mid-issuer = { path = "../mid-issuer", version = "0.2.0" }
 
 # ECDSA P-256 verification primitives. Same crate `kms-client` uses for
 # signing, so the wire format matches exactly. `ecdsa` feature pulls in
@@ -48,7 +48,7 @@ thiserror = "1"
 # In-memory signer + deterministic test fixtures use kms-client's
 # `DeviceSigner` trait + `InMemoryDeviceSigner` to mint test JWTs via
 # `mid-issuer` and then verify them in this crate's tests.
-kms-client = { path = "../kms-client", version = "0.1.0" }
+kms-client = { path = "../kms-client", version = "0.2.0" }
 # p256 directly so test fixtures can construct SigningKeys from a
 # deterministic seed (matches the mid-issuer test fixture pattern).
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }

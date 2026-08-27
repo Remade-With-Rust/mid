@@ -1,6 +1,6 @@
 [package]
 name = "kms-client"
-version = "0.1.1"
+version = "0.2.0"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Remade-With-Rust/mid"
@@ -12,7 +12,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 # Shared envelope types.
-kms-types = { path = "../kms-types", version = "0.1.0" }
+kms-types = { path = "../kms-types", version = "0.2.0" }
 
 # ECDSA P-256 — same primitive as kms-verifier and the existing M5 keys
 # managed by `mata-identity` / `mata-sync`.
@@ -47,6 +47,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 [dev-dependencies]
 # Integration test: kms-client signs, kms-verifier verifies. End-to-end
 # proof the two crates agree on the wire format and signing rules.
-kms-verifier = { path = "../kms-verifier", version = "0.1.0" }
+kms-verifier = { path = "../kms-verifier", version = "0.2.0" }
 tokio = { version = "1", features = ["rt", "macros", "sync"] }
 rand_core = { version = "0.6", features = ["getrandom"] }

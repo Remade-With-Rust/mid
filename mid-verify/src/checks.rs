@@ -22,10 +22,25 @@ fn decode_signature(b64: &str) -> Result<Signature, VerifyError> {
         segment: "signature",
         source,
     })?;
+    signature_from_raw(&bytes)
+}
+
+/// Build a `Signature` from raw `r || s` bytes, rejecting the degenerate cases.
+///
+/// The all-zero check is not redundant with `from_slice`: a wallet whose vault
+/// is locked, or whose signing call failed, commonly returns 64 zero bytes as a
+/// placeholder. Without this, such a placeholder reaches the verifier as an
+/// ordinary signature failure instead of the distinguishable condition it is.
+fn signature_from_raw(bytes: &[u8]) -> Result<Signature, VerifyError> {
     if bytes.len() != 64 {
-        return Err(VerifyError::SignatureWrongLength { actual: bytes.len() });
+        return Err(VerifyError::SignatureWrongLength {
+            actual: bytes.len(),
+        });
     }
-    Signature::from_slice(&bytes).map_err(|_| VerifyError::SignatureWrongLength { actual: bytes.len() })
+    if bytes.iter().all(|&b| b == 0) {
+        return Err(VerifyError::SignatureInvalidScalars);
+    }
+    Signature::from_slice(bytes).map_err(|_| VerifyError::SignatureInvalidScalars)
 }
 
 /// **Check 1.** Verify the genesis roster's self-signature against the
@@ -147,11 +162,7 @@ pub fn check_jws_signature(
             segment: "signature",
             source,
         })?;
-    if signature_bytes.len() != 64 {
-        return Err(VerifyError::SignatureWrongLength { actual: signature_bytes.len() });
-    }
-    let signature = Signature::from_slice(&signature_bytes)
-        .map_err(|_| VerifyError::SignatureWrongLength { actual: signature_bytes.len() })?;
+    let signature = signature_from_raw(&signature_bytes)?;
 
     current_pubkey
         .verify_prehash(&prehash, &signature)
@@ -216,4 +227,43 @@ pub fn validate_jws_header(header_bytes: &[u8]) -> Result<(), VerifyError> {
         return Err(VerifyError::InvalidJwsHeader);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod signature_tests {
+    use super::*;
+
+    /// A wallet with a locked vault, or whose signing call failed, returns 64
+    /// zero bytes as a placeholder. That must be rejected as its own condition,
+    /// not accepted and left to fail later as an ordinary bad signature.
+    #[test]
+    fn all_zero_signature_is_rejected() {
+        let zeros = [0u8; 64];
+        assert!(matches!(
+            signature_from_raw(&zeros),
+            Err(VerifyError::SignatureInvalidScalars)
+        ));
+    }
+
+    #[test]
+    fn wrong_length_is_reported_as_length_not_scalars() {
+        assert!(matches!(
+            signature_from_raw(&[1u8; 63]),
+            Err(VerifyError::SignatureWrongLength { actual: 63 })
+        ));
+    }
+
+    /// Guards the boundary: 64 non-zero bytes must not be rejected by the
+    /// all-zero check itself. (They may still fail scalar validation, which is
+    /// a different error path.)
+    #[test]
+    fn a_nonzero_64_byte_input_passes_the_zero_check() {
+        let mut sig = [0u8; 64];
+        sig[0] = 1;
+        sig[32] = 1;
+        assert!(!matches!(
+            signature_from_raw(&sig),
+            Err(VerifyError::SignatureWrongLength { .. })
+        ));
+    }
 }

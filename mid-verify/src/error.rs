@@ -95,6 +95,12 @@ pub enum VerifyError {
         actual: usize,
     },
 
+    /// The signature was 64 bytes but `r`/`s` are not valid P-256 scalars
+    /// (zero, >= curve order). Often means the wallet returned a placeholder
+    /// all-zero signature (vault locked / sign failed).
+    #[error("signature bytes are not a valid P-256 r||s (zero or out-of-range scalar)")]
+    SignatureInvalidScalars,
+
     // ─── Cryptographic checks ──────────────────────────────────────────────
     /// The genesis roster's self-signature did not verify against the key
     /// recoverable from the DID. Either the genesis roster was tampered

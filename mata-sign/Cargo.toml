@@ -1,6 +1,6 @@
 [package]
 name = "mata-sign"
-version = "0.1.0"
+version = "0.2.0"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Remade-With-Rust/mid"
 edition = "2021"
@@ -15,13 +15,13 @@ crate-type = ["rlib"]
 # byte forms, and the DeviceSigner trait re-export. mata-sign does NOT
 # reimplement any of this — it produces a different *payload* (content instead
 # of identity claims) through the same audited machinery.
-mid-issuer = { path = "../mid-issuer", version = "0.1.0" }
+mid-issuer = { path = "../mid-issuer", version = "0.2.0" }
 
 # The verification-side core, reused verbatim: the four self-contained checks
 # (genesis self-sig → roster chain → head VM → JWS signature), the JWS splitter,
 # header validation, and key/DID decoding. mata-sign hands these a synthetic
 # payload shaped from its own statement — no crypto is re-rolled here.
-mid-verify = { path = "../mid-verify", version = "0.1.0" }
+mid-verify = { path = "../mid-verify", version = "0.2.0" }
 
 # JSON serialization of the signed-statement payload (the JWS second segment).
 serde = { version = "1", features = ["derive"] }
@@ -45,7 +45,7 @@ thiserror = "1"
 [dev-dependencies]
 # In-memory P-256 signer for round-trip tests (the production signer is the
 # vault-loaded / Secure-Enclave device key, injected behind DeviceSigner).
-kms-client = { path = "../kms-client", version = "0.1.0" }
+kms-client = { path = "../kms-client", version = "0.2.0" }
 # Construct deterministic SigningKeys from a seed in tests + self-sign the
 # genesis roster the same way the wallet does (mirrors the mid-verify fixtures).
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
