@@ -5,9 +5,12 @@
 //! [`crate::verify`] runs them in order; if any fails, verification
 //! short-circuits.
 
+use alloc::format;
+use alloc::vec::Vec;
+
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use mid_issuer::canonical;
-use mid_issuer::{EmbeddedRosterChainEntry, MidJwtPayload, VerificationMethod};
+use mid_types::canonical;
+use mid_types::{EmbeddedRosterChainEntry, MidJwtPayload, VerificationMethod};
 use p256::ecdsa::signature::hazmat::PrehashVerifier;
 use p256::ecdsa::Signature;
 use sha2::{Digest, Sha256};
@@ -18,9 +21,9 @@ use crate::keys::{pubkey_from_did, pubkey_from_multibase};
 /// Decode a base64url-encoded ECDSA P-256 signature into the
 /// `p256::ecdsa::Signature` type used by `verify_prehash`.
 fn decode_signature(b64: &str) -> Result<Signature, VerifyError> {
-    let bytes = URL_SAFE_NO_PAD.decode(b64).map_err(|source| VerifyError::Base64Decode {
+    let bytes = URL_SAFE_NO_PAD.decode(b64).map_err(|cause| VerifyError::Base64Decode {
         segment: "signature",
-        source,
+        cause,
     })?;
     signature_from_raw(&bytes)
 }
@@ -158,9 +161,9 @@ pub fn check_jws_signature(
 
     let prehash: [u8; 32] = Sha256::digest(signing_input.as_bytes()).into();
     let signature_bytes =
-        URL_SAFE_NO_PAD.decode(signature_b64).map_err(|source| VerifyError::Base64Decode {
+        URL_SAFE_NO_PAD.decode(signature_b64).map_err(|cause| VerifyError::Base64Decode {
             segment: "signature",
-            source,
+            cause,
         })?;
     let signature = signature_from_raw(&signature_bytes)?;
 
@@ -189,11 +192,11 @@ pub fn split_jws(jwt: &str) -> Result<JwsParts<'_>, VerifyError> {
     let signing_input_end = header_b64.len() + 1 + payload_b64.len();
     let signing_input = &jwt[..signing_input_end];
 
-    let header_bytes = URL_SAFE_NO_PAD.decode(header_b64).map_err(|source| {
-        VerifyError::Base64Decode { segment: "header", source }
+    let header_bytes = URL_SAFE_NO_PAD.decode(header_b64).map_err(|cause| {
+        VerifyError::Base64Decode { segment: "header", cause }
     })?;
-    let payload_bytes = URL_SAFE_NO_PAD.decode(payload_b64).map_err(|source| {
-        VerifyError::Base64Decode { segment: "payload", source }
+    let payload_bytes = URL_SAFE_NO_PAD.decode(payload_b64).map_err(|cause| {
+        VerifyError::Base64Decode { segment: "payload", cause }
     })?;
 
     Ok(JwsParts {

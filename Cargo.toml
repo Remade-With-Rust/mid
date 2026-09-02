@@ -5,6 +5,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "mid-types",
     "kms-types",
     "kms-verifier",
     "kms-client",
