@@ -6,7 +6,14 @@
 //! avoided — production code reading `match err { ... }` should never
 //! hit a fallback.
 
+use alloc::string::String;
 use thiserror::Error;
+
+impl From<serde_json::Error> for VerifyError {
+    fn from(e: serde_json::Error) -> Self {
+        VerifyError::PayloadJson(e)
+    }
+}
 
 /// The single error type returned by [`crate::verify_mid_response`].
 #[derive(Debug, Error)]
@@ -17,21 +24,23 @@ pub enum VerifyError {
     InvalidJwsShape(usize),
 
     /// One of the base64url segments failed to decode.
-    #[error("base64url decoding failed for {segment} segment: {source}")]
+    #[error("base64url decoding failed for {segment} segment: {cause}")]
     Base64Decode {
         /// Which segment failed: "header", "payload", or "signature".
         segment: &'static str,
-        /// The underlying base64 error.
-        source: base64::DecodeError,
+        /// The underlying base64 error (the `source` chain needs `std`:
+        /// `base64` implements the error trait only there).
+        #[cfg_attr(feature = "std", source)]
+        cause: base64::DecodeError,
     },
 
     /// The JWS header was not valid JSON or did not declare `alg: ES256`.
     #[error("invalid or unsupported JWS header (alg must be ES256, typ must be JWT)")]
     InvalidJwsHeader,
 
-    /// The JWT payload JSON was not parseable into a [`mid_issuer::MidJwtPayload`].
+    /// The JWT payload JSON was not parseable into a [`mid_types::MidJwtPayload`].
     #[error("JWT payload JSON malformed: {0}")]
-    PayloadJson(#[from] serde_json::Error),
+    PayloadJson(#[cfg_attr(feature = "std", source)] serde_json::Error),
 
     // ─── Metadata checks ───────────────────────────────────────────────────
     /// The `aud` claim did not match the verifier's expected audience.

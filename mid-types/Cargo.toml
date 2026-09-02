@@ -1,0 +1,17 @@
+[package]
+name = "mid-types"
+version = "0.2.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Remade-With-Rust/mid"
+description = "The mID wire-format types (the JWT payload, embedded rosters and verification methods) and their canonical signing bytes, `no_std` + `alloc`, shared by mid-issuer and mid-verify."
+keywords = ["mid", "did", "identity", "no-std"]
+categories = ["no-std", "authentication"]
+
+[features]
+default = ["std"]
+std = ["serde/std", "serde_json/std"]
+
+[dependencies]
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

@@ -11,6 +11,7 @@ description = "mID JWT issuer — wallet-side. Mints self-issued sign-in tokens 
 crate-type = ["rlib"]
 
 [dependencies]
+mid-types = { path = "../mid-types", version = "0.2.0" }
 # Shared envelope types (RosterUpdate, signing primitives) reused by mID's
 # embedded_roster_chain entries. mID does not extend these types — it bundles
 # already-produced RosterUpdate envelopes into the response.

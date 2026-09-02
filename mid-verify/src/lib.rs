@@ -1,3 +1,4 @@
+#![cfg_attr(not(feature = "std"), no_std)]
 //! # `mid-verify` — RP-side mID JWT verifier
 //!
 //! Phase 0 of the [mID Mission](../../../docs/plans/phase%201%20sso_permissionless_mission.md).
@@ -63,13 +64,16 @@ pub use keys::{did_from_pubkey, multibase_from_pubkey, pubkey_from_did, pubkey_f
 
 // Re-export the wire-format types from mid-issuer so RPs only need one
 // `cargo add mid-verify` to access everything they need.
-pub use mid_issuer::{
+pub use mid_types::{
     AttestedBy, ClaimValue, EmbeddedGenesisRoster, EmbeddedRosterChainEntry,
     EmbeddedVerificationMethod, MidJwtPayload, VerificationMethod,
 };
 
+extern crate alloc;
+
+use alloc::collections::BTreeMap;
+use alloc::string::String;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
 
 // ─── Public API ────────────────────────────────────────────────────────────
 
@@ -198,7 +202,7 @@ pub fn verify_mid_response(jwt: &str, config: &VerifyConfig) -> Result<VerifiedM
 
     // 4. Compute genesis_roster_hash + current_version for the RP's
     //    anchoring + rollback-detection use.
-    let genesis_canonical = mid_issuer::canonical::genesis_canonical_bytes(
+    let genesis_canonical = mid_types::canonical::genesis_canonical_bytes(
         &payload.embedded_genesis_roster,
     );
     let genesis_roster_hash: [u8; 32] = Sha256::digest(&genesis_canonical).into();
@@ -314,7 +318,7 @@ mod tests {
     /// Sign the canonical bytes of a genesis roster with the given key,
     /// returning the base64url-encoded `r || s`.
     fn sign_genesis(roster: &EmbeddedGenesisRoster, signing_key: &SigningKey) -> String {
-        let canonical = mid_issuer::canonical::genesis_canonical_bytes(roster);
+        let canonical = mid_types::canonical::genesis_canonical_bytes(roster);
         let prehash: [u8; 32] = Sha256::digest(&canonical).into();
         let sig: Signature = signing_key.sign_prehash(&prehash).unwrap();
         let normalized = sig.normalize_s().unwrap_or(sig);
@@ -324,7 +328,7 @@ mod tests {
 
     /// Sign the canonical bytes of a chain entry with the given key.
     fn sign_chain_entry(entry: &EmbeddedRosterChainEntry, signing_key: &SigningKey) -> String {
-        let canonical = mid_issuer::canonical::chain_entry_canonical_bytes(entry);
+        let canonical = mid_types::canonical::chain_entry_canonical_bytes(entry);
         let prehash: [u8; 32] = Sha256::digest(&canonical).into();
         let sig: Signature = signing_key.sign_prehash(&prehash).unwrap();
         let normalized = sig.normalize_s().unwrap_or(sig);

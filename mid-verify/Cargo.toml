@@ -12,43 +12,59 @@ description = "mID JWT verifier — RP-side. Runs the four-step verification (ge
 [lib]
 crate-type = ["rlib"]
 
+[features]
+default = ["std"]
+# `std` forwards to the dependencies (std error sources, std strings); the
+# verifier itself needs only `alloc`.
+std = [
+    "mid-types/std",
+    "p256/std",
+    "sha2/std",
+    "base64/std",
+    "bs58/std",
+    "serde/std",
+    "serde_json/std",
+    "thiserror/std",
+]
+
 [dependencies]
 # Shared wire-format types + canonical-bytes producer for the embedded
 # rosters. The wallet (via mid-issuer) and this crate both consume the
 # same canonical_bytes module — single source of truth for the signing
 # form.
-mid-issuer = { path = "../mid-issuer", version = "0.2.0" }
+mid-types = { path = "../mid-types", version = "0.2.0", default-features = false }
 
 # ECDSA P-256 verification primitives. Same crate `kms-client` uses for
 # signing, so the wire format matches exactly. `ecdsa` feature pulls in
 # Signature + VerifyingKey + signature::Verifier impls.
-p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 
 # SHA-256 prehash for ECDSA verification. Pure Rust, wasm-compatible.
-sha2 = "0.10"
+sha2 = { version = "0.10", default-features = false }
 
 # base64url (no padding) — JWS compact form per RFC 7515 §3.
-base64 = "0.22"
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
 
 # base58btc for DID-encoded genesis pubkey decoding + multibase pubkey
 # decoding on roster VMs (matches the `did:mata:<base58>` format defined
 # by `kms-types::did`).
-bs58 = "0.5"
+bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
 
 # JSON deserialization of the JWT payload (the embedded rosters arrive
 # inside the JSON). Reuses the same `MidJwtPayload` struct produced by
 # the issuer.
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
 
 # Typed error variants per ADR 0005.
-thiserror = "1"
+thiserror = { version = "2", default-features = false }
 
 [dev-dependencies]
 # In-memory signer + deterministic test fixtures use kms-client's
 # `DeviceSigner` trait + `InMemoryDeviceSigner` to mint test JWTs via
 # `mid-issuer` and then verify them in this crate's tests.
 kms-client = { path = "../kms-client", version = "0.2.0" }
+mid-issuer = { path = "../mid-issuer", version = "0.2.0" }
 # p256 directly so test fixtures can construct SigningKeys from a
 # deterministic seed (matches the mid-issuer test fixture pattern).
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }

@@ -17,6 +17,9 @@
 //! we'll prepend the `p256-pub` multicodec varint `[0x80, 0x24]` and
 //! decode accordingly. The wire-format bump goes through a follow-on ADR.
 
+use alloc::format;
+use alloc::string::{String, ToString};
+
 use p256::ecdsa::VerifyingKey;
 
 use crate::error::VerifyError;
