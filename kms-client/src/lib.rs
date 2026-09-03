@@ -40,11 +40,10 @@
 
 mod client;
 mod sign;
-mod signer;
 
 pub use client::{ClientError, KmsClient};
+pub use mid_signer::{DeviceSigner, InMemoryDeviceSigner};
 pub use sign::{sign_assertion, sign_roster_update};
-pub use signer::{DeviceSigner, InMemoryDeviceSigner};
 
 // Re-exported so callers don't need to depend on kms-types directly.
 pub use kms_types::{

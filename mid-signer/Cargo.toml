@@ -1,0 +1,28 @@
+[package]
+name = "mid-signer"
+version = "0.2.0"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Remade-With-Rust/mid"
+edition = "2021"
+description = "The device-signing seam of MATA mID: the DeviceSigner trait (a stable device id and a low-s ECDSA P-256 signature over a 32-byte prehash) and the in-memory software signer. no_std + alloc, so a secure element, an eFuse key or a microcontroller implements the same contract kms-client, mid-issuer and mata-sign consume."
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = ["std"]
+# `std`: p256's std error types and the `InMemoryDeviceSigner::generate`
+# helper (OS randomness). Without it the crate is `no_std` + `alloc`.
+std = ["p256/std", "dep:rand_core"]
+
+[dependencies]
+# ECDSA P-256 — the same primitive as kms-verifier and the M5 keys.
+p256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
+
+# OS randomness for `InMemoryDeviceSigner::generate` only. The trait never
+# touches an RNG.
+rand_core = { version = "0.6", features = ["getrandom"], optional = true }
+
+[dev-dependencies]
+sha2 = "0.10"
