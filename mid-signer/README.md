@@ -15,8 +15,11 @@ asks the same two things of the key: a stable device id, and a canonical
   (`InMemoryDeviceSigner`) is the reference each implementation is checked
   against: same key, same prehash, same 64 bytes (RFC 6979).
 
-`no_std` + `alloc` without the default `std` feature (`std` adds p256's std
-error types and the `generate` helper's OS randomness).
+`no_std` without the default `std` feature; `alloc` (implied by `std`) is what
+`InMemoryDeviceSigner` needs, and without it the crate is the trait and the
+low-s rule alone — a microcontroller with its key in hardware links nothing
+else. `std` adds p256's std error types and the `generate` helper's OS
+randomness.
 
 ```rust
 use mid_signer::{DeviceSigner, InMemoryDeviceSigner};

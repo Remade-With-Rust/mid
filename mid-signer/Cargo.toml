@@ -5,7 +5,7 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Remade-With-Rust/mid"
 edition = "2021"
-description = "The device-signing seam of MATA mID: the DeviceSigner trait (a stable device id and a low-s ECDSA P-256 signature over a 32-byte prehash) and the in-memory software signer. no_std + alloc, so a secure element, an eFuse key or a microcontroller implements the same contract kms-client, mid-issuer and mata-sign consume."
+description = "The device-signing seam of MATA mID: the DeviceSigner trait (a stable device id and a low-s ECDSA P-256 signature over a 32-byte prehash) and the in-memory software signer. no_std (the trait needs no allocator), so a secure element, an eFuse key or a microcontroller implements the same contract kms-client, mid-issuer and mata-sign consume."
 
 [lib]
 crate-type = ["rlib"]
@@ -13,8 +13,11 @@ crate-type = ["rlib"]
 [features]
 default = ["std"]
 # `std`: p256's std error types and the `InMemoryDeviceSigner::generate`
-# helper (OS randomness). Without it the crate is `no_std` + `alloc`.
-std = ["p256/std", "dep:rand_core"]
+# helper (OS randomness). `alloc`: the in-memory signer (it owns a `String`
+# and hands out a `Vec`). With neither the crate is the trait and the low-s
+# rule over `core` alone — what a microcontroller without an allocator links.
+std = ["alloc", "p256/std", "dep:rand_core"]
+alloc = ["p256/alloc"]
 
 [dependencies]
 # ECDSA P-256 — the same primitive as kms-verifier and the M5 keys.

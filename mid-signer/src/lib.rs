@@ -14,18 +14,26 @@
 //! reference every other implementation is checked against (same key, same
 //! prehash, same 64 bytes — RFC 6979 makes it deterministic).
 //!
-//! `no_std` + `alloc` without the `std` feature.
+//! `no_std` without the `std` feature; without `alloc` as well it is the
+//! trait and [`canonical_bytes`] alone, which is all a microcontroller with
+//! its key in hardware needs.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "alloc")]
 extern crate alloc;
 
+#[cfg(feature = "alloc")]
 use alloc::string::String;
+#[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
+#[cfg(feature = "alloc")]
 use p256::ecdsa::signature::hazmat::PrehashSigner;
-use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
+use p256::ecdsa::Signature;
+#[cfg(feature = "alloc")]
+use p256::ecdsa::{SigningKey, VerifyingKey};
 
 /// The abstract capability a device's signing key provides.
 ///
@@ -71,17 +79,19 @@ pub fn canonical_bytes(raw: Signature) -> [u8; 64] {
     out
 }
 
-/// In-memory [`DeviceSigner`] backed by a raw [`SigningKey`].
+/// In-memory [`DeviceSigner`] backed by a raw [`SigningKey`] (feature `alloc`).
 ///
 /// Use this for tests and for a first-cut production deploy where the
 /// signing key lives in the app's encrypted vault rather than in a Secure
 /// Enclave / Keystore. Hardware-backed implementations replace this without
 /// changing call sites — the trait is the contract.
+#[cfg(feature = "alloc")]
 pub struct InMemoryDeviceSigner {
     device_id: String,
     signing_key: SigningKey,
 }
 
+#[cfg(feature = "alloc")]
 impl InMemoryDeviceSigner {
     /// Wrap an existing [`SigningKey`] under a stable `device_id`.
     pub fn new(device_id: impl Into<String>, signing_key: SigningKey) -> Self {
@@ -122,6 +132,7 @@ impl InMemoryDeviceSigner {
     }
 }
 
+#[cfg(feature = "alloc")]
 impl DeviceSigner for InMemoryDeviceSigner {
     fn device_id(&self) -> &str {
         &self.device_id
