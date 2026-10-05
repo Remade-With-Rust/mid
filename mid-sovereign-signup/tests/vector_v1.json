@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "pepper_b64u": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA",
+  "tenant": "acme",
+  "email_raw": "  Alice.Smith@Example.COM ",
+  "email": "alice.smith@example.com",
+  "email_idx_b64u": "01oMdIGbWIqxryGiww_OloF-z1lqSEOX-TVQeNX3HSU",
+  "challenge_id_b64u": "paWlpaWlpaWlpaWlpaWlpQ",
+  "code": "123456",
+  "code_mac_b64u": "zAczeOPt0P250EPhWT3Y6xgHw6CDrEu2AhI4BFy93M4",
+  "now": 1759190400,
+  "user_random_b64u": "WlpaWlpaWlpaWlpaWlpaWg",
+  "user_id": "5a5a5a5a-5a5a-4a5a-9a5a-5a5a5a5a5a5a",
+  "claims_json": "{\"v\":1,\"tenant\":\"acme\",\"user_id\":\"5a5a5a5a-5a5a-4a5a-9a5a-5a5a5a5a5a5a\",\"email_idx\":\"01oMdIGbWIqxryGiww_OloF-z1lqSEOX-TVQeNX3HSU\",\"email_verified_at\":1759190430}",
+  "claims_sha256_b64u": "qn9OeRdo5WmlBbMNv3eCkpHHJ7PWPSCRQ1GbjshsTcQ"
+}

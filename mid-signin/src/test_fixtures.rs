@@ -60,7 +60,7 @@ impl IdentityFixture {
         keys::did_from_pubkey(self.genesis.signing_key.verifying_key())
     }
 
-    fn vm_for(&self, device: &DeviceKey) -> VerificationMethod {
+    pub fn vm_for(&self, device: &DeviceKey) -> VerificationMethod {
         let did = self.did();
         VerificationMethod {
             id: format!("{did}#{}", device.device_id),
@@ -70,7 +70,7 @@ impl IdentityFixture {
         }
     }
 
-    fn embedded_vm_for(&self, device: &DeviceKey) -> EmbeddedVerificationMethod {
+    pub fn embedded_vm_for(&self, device: &DeviceKey) -> EmbeddedVerificationMethod {
         let did = self.did();
         EmbeddedVerificationMethod {
             id: format!("{did}#{}", device.device_id),
@@ -81,7 +81,7 @@ impl IdentityFixture {
     }
 }
 
-fn sign_genesis(roster: &EmbeddedGenesisRoster, signing_key: &SigningKey) -> String {
+pub fn sign_genesis(roster: &EmbeddedGenesisRoster, signing_key: &SigningKey) -> String {
     let canonical = mid_issuer::canonical::genesis_canonical_bytes(roster);
     let prehash: [u8; 32] = Sha256::digest(&canonical).into();
     let sig: Signature = signing_key.sign_prehash(&prehash).unwrap();
@@ -89,7 +89,7 @@ fn sign_genesis(roster: &EmbeddedGenesisRoster, signing_key: &SigningKey) -> Str
     URL_SAFE_NO_PAD.encode(normalized.to_bytes())
 }
 
-fn sign_chain_entry(entry: &EmbeddedRosterChainEntry, signing_key: &SigningKey) -> String {
+pub fn sign_chain_entry(entry: &EmbeddedRosterChainEntry, signing_key: &SigningKey) -> String {
     let canonical = mid_issuer::canonical::chain_entry_canonical_bytes(entry);
     let prehash: [u8; 32] = Sha256::digest(&canonical).into();
     let sig: Signature = signing_key.sign_prehash(&prehash).unwrap();

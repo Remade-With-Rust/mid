@@ -33,6 +33,16 @@ impl InMemoryNonceStore {
     pub async fn len(&self) -> usize {
         self.inner.lock().await.len()
     }
+
+    /// Drop every nonce that expired before `now_secs` (issued, never used).
+    /// A long-running service calls this on a timer; without it, abandoned
+    /// nonces accumulate forever. Returns how many were dropped.
+    pub async fn prune_expired(&self, now_secs: u64) -> usize {
+        let mut guard = self.inner.lock().await;
+        let before = guard.len();
+        guard.retain(|_, e| e.expires_at >= now_secs);
+        before - guard.len()
+    }
 }
 
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]

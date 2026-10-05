@@ -37,6 +37,8 @@ sha2 = "0.10"
 thiserror = "1"
 
 [dev-dependencies]
+# Hex fields of the derived-identity vector (tests only; in Cargo.lock already).
+hex = "0.4"
 # Round-trip tests use pretty-printed JSON for readable failures.
 serde_json = "1"
 # In-memory signer for tests (ships with kms-client as a test helper).

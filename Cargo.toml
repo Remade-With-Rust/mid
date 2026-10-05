@@ -11,6 +11,7 @@ members = [
     "mid-issuer",
     "mid-verify",
     "mid-signin",
+    "mid-sovereign-signup",
     "mata-sign",
     "mata-identity",
     "mata-cap",

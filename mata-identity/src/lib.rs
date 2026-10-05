@@ -46,6 +46,8 @@ pub mod did;
 pub mod hkdf;
 // M4 (SMB): controlled-entity identity — per-holding entity DID + control proof.
 pub mod entity;
+// DID-logins v2 (ADR 0011): the personal root derived from the vault key.
+pub mod root;
 
 pub use canonicalize::{canonicalize_for_signing_unsigned, CanonicalizeError};
 pub use did::{did_for_user, DidDocument, DidProof, MataAttestation, ServiceEndpoint, VerificationMethod};
@@ -54,6 +56,10 @@ pub use entity::{
     EntityIdentity, ENTITY_PROOF_VERSION,
 };
 pub use hkdf::{derive_subordinate_key, PURPOSE_ENCRYPTION};
+pub use root::{
+    derive_root_identity, did_from_public_key_sec1, multibase_from_public_key_sec1, RootIdentity,
+    MID_DERIVED_GENESIS_EPOCH, MID_GENESIS_DEVICE_KID, PURPOSE_ROOT_SIGNING,
+};
 
 /// A P-256 public key serialized as a JWK (JSON Web Key).
 ///

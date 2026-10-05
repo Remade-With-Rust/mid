@@ -173,4 +173,25 @@ pub enum VerifyError {
         /// The highest version this RP has seen for this DID.
         last_seen: u64,
     },
+
+    /// The token's roster history does not contain the exact roster the RP saw
+    /// last at `version`: another history was branched off an older roster.
+    /// Returned by [`crate::VerifiedMid::check_continuity`]. A device removed at
+    /// some version, but listed in an earlier one, can sign its own later
+    /// versions from that earlier roster; only the content of the version the RP
+    /// already saw tells the two histories apart.
+    #[error("roster fork detected: this token's history differs from the one seen at version {version}")]
+    ForkDetected {
+        /// The version the RP recorded, whose roster this token does not carry.
+        version: u64,
+    },
+
+    /// A roster chain entry names a different DID than the token's issuer.
+    #[error("roster chain entry v{entry_version} names {entry_did}, not the issuer")]
+    ChainEntryDidMismatch {
+        /// The entry's version.
+        entry_version: u64,
+        /// The DID the entry names.
+        entry_did: String,
+    },
 }

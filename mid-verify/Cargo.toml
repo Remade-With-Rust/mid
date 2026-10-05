@@ -45,6 +45,8 @@ serde_json = "1"
 thiserror = "1"
 
 [dev-dependencies]
+# Hex fields of the derived-identity vector (tests only; in Cargo.lock already).
+hex = "0.4"
 # In-memory signer + deterministic test fixtures use kms-client's
 # `DeviceSigner` trait + `InMemoryDeviceSigner` to mint test JWTs via
 # `mid-issuer` and then verify them in this crate's tests.

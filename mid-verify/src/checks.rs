@@ -76,6 +76,14 @@ pub fn check_roster_chain(payload: &MidJwtPayload) -> Result<(), VerifyError> {
     let mut prior_version: u64 = payload.embedded_genesis_roster.version;
 
     for entry in &payload.embedded_roster_chain {
+        // Every entry is a roster of this identity: a link that names another DID
+        // has no business in its history.
+        if entry.did != payload.iss {
+            return Err(VerifyError::ChainEntryDidMismatch {
+                entry_version: entry.version,
+                entry_did: entry.did.clone(),
+            });
+        }
         check_one_chain_entry(entry, prior_vms, prior_version)?;
         prior_vms = &entry.verification_methods;
         prior_version = entry.version;
@@ -100,12 +108,12 @@ fn check_one_chain_entry(
     // 2. Find the signer's VM in the prior roster.
     //
     // `signer_kid` is the bare device kid (e.g., "dev-laptop"); the VM
-    // ID in the prior roster is `<did>#<kid>`. Match by suffix to avoid
-    // hardcoding the DID-prefix shape here.
-    let kid_suffix = format!("#{}", entry.signer_kid);
+    // ID in the prior roster is `<did>#<kid>`, exactly. (A suffix match
+    // would also accept `<anything>#<kid>`.)
+    let signer_id = format!("{}#{}", entry.did, entry.signer_kid);
     let signer_vm = prior_vms
         .iter()
-        .find(|vm| vm.id.ends_with(&kid_suffix))
+        .find(|vm| vm.id == signer_id)
         .ok_or_else(|| VerifyError::ChainSignerNotInPriorRoster {
             entry_version: entry.version,
             signer_kid: entry.signer_kid.clone(),
@@ -128,13 +136,27 @@ fn check_one_chain_entry(
 ///
 /// The head roster is the last entry of the chain, or the genesis roster
 /// if the chain is empty.
+///
+/// The whole method must match, key included, not only its id. Check 4
+/// verifies the JWS with the key *the token carries*, and rosters are public
+/// (every token embeds its owner's), so an id-only match let anyone copy a
+/// roster, keep a rostered device id, put their own key beside it and sign:
+/// all four checks passed (found 2026-10-05; test
+/// `a_rostered_id_with_a_strangers_key_is_rejected`).
 pub fn check_current_vm_in_head(payload: &MidJwtPayload) -> Result<(), VerifyError> {
     let head_vms: &[VerificationMethod] = match payload.embedded_roster_chain.last() {
         Some(head) => &head.verification_methods,
         None => &payload.embedded_genesis_roster.verification_methods,
     };
-    let current_id = &payload.embedded_verification_method.id;
-    if !head_vms.iter().any(|vm| &vm.id == current_id) {
+    let current = &payload.embedded_verification_method;
+    let current_id = &current.id;
+    let rostered = head_vms.iter().any(|vm| {
+        vm.id == current.id
+            && vm.public_key_multibase == current.public_key_multibase
+            && vm.vm_type == current.vm_type
+            && vm.controller == current.controller
+    });
+    if !rostered {
         return Err(VerifyError::CurrentVmNotInHeadRoster {
             vm_id: current_id.clone(),
         });

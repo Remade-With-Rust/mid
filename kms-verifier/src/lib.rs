@@ -82,7 +82,7 @@ mod verifier;
 
 pub use in_memory::{InMemoryDidResolver, InMemoryNonceStore};
 pub use traits::{Clock, DidResolver, NonceGenerator, NonceStore, SystemClock, SystemNonceGenerator};
-pub use verifier::{VerifiedIdentity, VerifiedRosterUpdate, Verifier};
+pub use verifier::{VerifiedIdentity, VerifiedRosterUpdate, Verifier, did_from_pubkey_sec1, pubkey_sec1_from_did, verify_genesis};
 
 // Re-exported so callers don't need to depend on kms-types directly when
 // they only consume the verifier's surface.

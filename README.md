@@ -18,6 +18,7 @@ against it: free, forever. The crates depend on nothing proprietary.
 | Crate | What it's for |
 |---|---|
 | [`mid-signin`](mid-signin) | **The drop-in RP kit — start here for website sign-in.** Wraps `mid-verify` with the stateful RP duties (single-use nonces, genesis anchoring, rollback detection), an embedded zero-schema store (`redb-store`), and ready-made axum routes (`routes`). Ten lines to production sign-in. |
+| [`mid-sovereign-signup`](mid-sovereign-signup) | **Email + one-time-code sign-up/sign-in — for users without a DID.** Headless and pure: HMAC-committed six-digit codes under a server pepper, attempt/TTL/resend policy, tenant-scoped users with optional DID linking, and a `mata-sign` attestation any backend verifies offline. Sits next to `mid-signin`; a service can accept either proof. |
 | [`mid-verify`](mid-verify) | **RP-side verifier.** Four-step local verification (genesis self-sig → roster chain → head version → JWS) of an mID sign-in token. Pure function, no I/O. The cryptographic core `mid-signin` composes. |
 | [`mid-issuer`](mid-issuer) | **Wallet-side issuer.** Mints the self-issued sign-in JWT from an identity snapshot + the device signing key. |
 | [`mata-sign`](mata-sign) | Sign **arbitrary** content as a `did:mata`, verifiable offline by anyone — the primitive under document signing + IAMHUMAN post signing. |
