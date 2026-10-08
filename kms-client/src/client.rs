@@ -119,9 +119,7 @@ impl KmsClient {
             .await
             .map_err(|e| ClientError::BadResponseBody(e.to_string()))?;
 
-        envelope
-            .validate()
-            .map_err(ClientError::InvalidEnvelope)?;
+        envelope.validate().map_err(ClientError::InvalidEnvelope)?;
 
         Ok(envelope)
     }

@@ -6,6 +6,7 @@
 resolver = "2"
 members = [
     "mid-types",
+    "mid-signer",
     "kms-types",
     "kms-verifier",
     "kms-client",
