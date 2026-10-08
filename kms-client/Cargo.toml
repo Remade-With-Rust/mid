@@ -10,6 +10,18 @@ description = "Client-side helpers for MATA KMS sovereign-auth — signs asserti
 [lib]
 crate-type = ["rlib"]
 
+[features]
+# The HTTP client, on by default so nothing that uses `KmsClient` changes.
+#
+# Turning it OFF leaves the signing half -- `InMemoryDeviceSigner`,
+# `sign_assertion`, `sign_roster_update` -- which needs no network at all.
+# That matters to consumers who only want the signer as an oracle: with
+# `http` on, reqwest pulls rustls, which pulls `ring`, and a project that
+# bans platform assembly then cannot depend on this crate even for a test
+# that never opens a socket (rusty_esp_mid's `cargo deny`, 2026-10-08).
+default = ["http"]
+http = ["dep:reqwest"]
+
 [dependencies]
 # Shared envelope types.
 kms-types = { path = "../kms-types", version = "0.2.0" }
@@ -25,7 +37,7 @@ p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"]
 # HTTP client. wasm32-target requests are routed through the browser's fetch
 # API automatically; native targets use rustls. Defaults disabled so we
 # explicitly opt into the feature set we want.
-reqwest = { version = "0.12", default-features = false, features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json"], optional = true }
 
 # JSON serde for the request/response bodies.
 serde = { version = "1", features = ["derive"] }
@@ -41,7 +53,7 @@ getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 
 # Native gets rustls + tokio runtime via reqwest.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 
 [dev-dependencies]
 # Integration test: kms-client signs, kms-verifier verifies. End-to-end
