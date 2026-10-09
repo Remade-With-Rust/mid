@@ -1,3 +1,7 @@
+### In The Wild with 3,332 Active Installs
+
+FREE RAG Converter Online -- <a href="https://RAGconverter.com">RAGconverter.com</a>
+
 # MATA mID
 
 **Permissionless, self-issued identity for Rust.** A user's identity is a keypair they
