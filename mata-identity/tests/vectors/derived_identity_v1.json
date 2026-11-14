@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "description": "Derived personal root identity, contract of record. One fixed vault key; every surface that derives the root, the DID, the genesis roster or the encryption key must reproduce these bytes. Read by mata-identity, mid-issuer and mid-verify tests. Never edit a value without a new version.",
+  "purpose": "root/signing",
+  "hkdf_salt": "MATA-PKI-v1",
+  "vault_key_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "root_private_scalar_hex": "0298c0670a7c7e6dba172de51f87d76d74012c2d305414bfa30000aff64644d9",
+  "root_public_key_sec1_hex": "043709dc110d3ffc7e41ce44d361ac8686868b4477ef6107d7b0c9098d2df44f4ed74b186956e5d9b6ad1ad993dc1b4e128a0d9f291da799cd83d2b36c027750a3",
+  "did": "did:mata:xPoFoPWHEJWJFQXHLCXhTgyx6nvCKeEiXpGyprbqUYjw",
+  "public_key_multibase": "zxPoFoPWHEJWJFQXHLCXhTgyx6nvCKeEiXpGyprbqUYjw",
+  "encryption_public_key_sec1_hex": "043dd1f9544d3601bef1e83bf7d417ef8b4b06abe73f42e42feccbefa917a6fc1188ee2ae5ccaf21ccd32e447838efe6ca8a5814a1e7ad387030be8a7c3fa9a9e0",
+  "genesis": {
+    "version": 1,
+    "device_kid": "device-0",
+    "signed_at": 1759190400,
+    "canonical_sha256_hex": "f03a97950bed4a7aeab24c0ad1d574c9ccb60607c793abb779520f1d984d7674"
+  }
+}

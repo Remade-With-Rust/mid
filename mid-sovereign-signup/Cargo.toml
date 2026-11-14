@@ -1,0 +1,175 @@
+[package]
+name = "mid-sovereign-signup"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Remade-With-Rust/mid"
+readme = "README.md"
+keywords = ["identity", "authentication", "signup", "otp", "email"]
+categories = ["authentication", "web-programming"]
+description = "Headless email + one-time-code sign-up/sign-in for Rust services — the open sibling of mid-signin for users who do not (yet) hold a MATA DID. A pure core: HMAC-committed six-digit codes, attempt/TTL/resend policy, a tenant-scoped user model with optional DID linking, and a mata-sign attestation any backend verifies offline."
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+# The persistent store: tenants, users, challenges, rate windows and the audit
+# log on spacedb-store (redb on disk, in-memory for tests and wasm). Every row
+# sealed with AES-256-GCM under a key-encryption key; every accepted write one
+# fsync'd transaction that carries its own audit rows.
+store = ["dep:spacedb-store"]
+# The HTTP service: browser routes (public id + origin allow-list), sessions,
+# attestations, signed-assertion backend/operator routes, webhooks, the
+# import door, /healthz, and the `signupd` binary. Native only.
+server = [
+    "store",
+    "dep:axum",
+    "dep:tokio",
+    "dep:reqwest",
+    "dep:kms-verifier",
+    "dep:kms-types",
+    "dep:kms-client",
+    "dep:mid-verify",
+    "dep:mata-cap",
+    "dep:p256",
+    "dep:tracing",
+    "dep:tracing-subscriber",
+    "dep:async-trait",
+]
+# Code delivery through AWS SES v2 (rustls, no C).
+mail-ses = ["server", "dep:aws-config", "dep:aws-sdk-sesv2"]
+# The headless client: typed calls over a transport seam (reqwest: fetch on
+# wasm32, rustls natively), typed errors, and a session-store seam with an
+# AES-256-GCM sealed file store. wasm32 + native.
+client = ["dep:reqwest", "dep:aes-gcm", "dep:argon2"]
+# `signupctl`: migrate a user base in (native JSONL or a Supabase auth.users
+# export) through the import door, and verify every id landed.
+cli = ["client", "dep:tokio"]
+
+[dependencies]
+# The attestation envelope. A verified sign-up is attested as a mata-sign
+# statement signed by the service's own DID — the artifact a tenant's backend
+# verifies offline, exactly as it would verify a MATA sign-in. This crate
+# never re-rolls any cryptography: the four self-contained checks are
+# mid-verify's, reached through mata-sign.
+mata-sign = { path = "../mata-sign", version = "0.2.0" }
+# `IdentitySnapshot` — the signing identity a multi-device service presents
+# to `sign_attestation`. Re-exported so adopters depend on this crate only.
+mid-issuer = { path = "../mid-issuer", version = "0.2.0" }
+
+# Code commitments and the email index are HMAC-SHA256 under a server-held
+# pepper; stored values never reveal the code or the address.
+hmac = "0.12"
+sha2 = "0.10"
+# Constant-time comparison of code commitments (never `==`).
+subtle = "2"
+# Zeroize the pepper on drop.
+zeroize = "1"
+
+# User ids are RFC 4122 v4 UUIDs built from caller-supplied random bytes
+# (`uuid::Builder`), so the core needs no RNG feature of its own.
+uuid = "1"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+
+# base64url (no padding) — the encoding every 16/32-byte value takes on the
+# wire and at rest, matching mata-sign's content hashes.
+base64 = "0.22"
+
+# OS randomness for `OsEntropy` — the default `Entropy` seam.
+getrandom = "0.3"
+
+# `store` feature — SpaceDB Layer 0, the house storage primitive (a separate
+# open-core project, published on crates.io; release.sh publishes this edge by
+# version). Typed collections, single-writer transactions with per-write
+# durability, per-collection DEKs wrapped under a KeyProvider, row AAD bound
+# to table + key + schema version.
+spacedb-store = { version = "0.6.0", optional = true }
+
+# `server` feature. Backend callers prove a did:mata with the house signed-
+# assertion envelope (kms-types) checked by the house verifier (kms-verifier:
+# audience, issuer, purpose, roster, low-s, single-use nonce); grants are
+# mata-cap capabilities. The service's own DID signs attestations through the
+# in-memory device signer (kms-client) over a P-256 key.
+axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio", "query"], optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal"], optional = true }
+reqwest = { version = "0.12", default-features = false, features = ["json"], optional = true }
+kms-verifier = { path = "../kms-verifier", version = "0.2.0", optional = true }
+kms-types = { path = "../kms-types", version = "0.2.0", optional = true }
+kms-client = { path = "../kms-client", version = "0.2.0", optional = true }
+mid-verify = { path = "../mid-verify", version = "0.2.0", optional = true }
+mata-cap = { path = "../mata-cap", version = "0.2.0", optional = true }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"], optional = true }
+tracing = { version = "0.1", optional = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+async-trait = { version = "0.1", optional = true }
+
+# `client` feature — sessions sealed at rest: AES-256-GCM, and Argon2id with
+# the wallet's parameters for passphrase-derived keys.
+aes-gcm = { version = "0.10", optional = true }
+argon2 = { version = "0.5", optional = true }
+
+# `mail-ses` feature — the house mail transport.
+aws-config = { version = "1", default-features = false, features = ["behavior-version-latest", "default-https-client", "rt-tokio"], optional = true }
+aws-sdk-sesv2 = { version = "1", default-features = false, features = ["behavior-version-latest", "default-https-client", "rt-tokio"], optional = true }
+
+# Native TLS for reqwest (rustls, no C); on wasm32 reqwest is `fetch`.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[dev-dependencies]
+# Attestation tests sign with the in-memory P-256 device signer and derive a
+# real `did:mata` from the key — the same fixtures mata-sign's own tests use —
+# so every test exercises the genuine artifact, not a mock.
+kms-client = { path = "../kms-client", version = "0.2.0" }
+mid-verify = { path = "../mid-verify", version = "0.2.0" }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+# Scratch directories for the on-disk store tests.
+tempfile = "3"
+# Server tests drive a real bound socket.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "process", "io-util"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+axum = { version = "0.7", default-features = false, features = ["http1", "json", "tokio"] }
+kms-types = { path = "../kms-types", version = "0.2.0" }
+kms-verifier = { path = "../kms-verifier", version = "0.2.0" }
+base64 = "0.22"
+
+[[test]]
+name = "store"
+required-features = ["store"]
+
+[[test]]
+name = "server"
+required-features = ["server"]
+
+[[test]]
+name = "referrals"
+required-features = ["store"]
+
+[[test]]
+name = "webhook_formats"
+required-features = ["server"]
+
+[[bin]]
+name = "signupd"
+path = "src/bin/signupd.rs"
+required-features = ["server"]
+
+[[test]]
+name = "client"
+required-features = ["server", "client"]
+
+[[bin]]
+name = "signupctl"
+path = "src/bin/signupctl.rs"
+required-features = ["cli"]
+
+[[test]]
+name = "signupctl"
+required-features = ["server", "cli"]

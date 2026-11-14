@@ -22,6 +22,8 @@ kms-types = { path = "../kms-types", version = "0.2.0" }
 # - `std` for `std::error::Error` impls on the error types.
 # - prehash verify (`PrehashVerifier` trait) is in the default ecdsa surface.
 p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+# did:mata:<base58(compressed pubkey)> — the key ↔ DID binding for genesis.
+bs58 = "0.5"
 
 # Async traits (NonceStore, DidResolver) — the verifier is consumed from
 # axum handlers in kms-banking-proxy.

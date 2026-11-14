@@ -219,12 +219,24 @@ fn nonce_capacity_enforced_and_sweep_recovers() {
 
 // ─── Anchor store invariants (unit level) ───────────────────────────────────
 
+/// A presented roster: genesis `[genesis; 32]` at v1, then one entry per
+/// `(version, byte)` with hash `[byte; 32]`.
+fn roster(genesis: u8, chain: &[(u64, u8)]) -> crate::PresentedRoster {
+    let mut roster_hashes = vec![(1, [genesis; 32])];
+    roster_hashes.extend(chain.iter().map(|(v, b)| (*v, [*b; 32])));
+    crate::PresentedRoster {
+        genesis_roster_hash: [genesis; 32],
+        current_version: roster_hashes.last().unwrap().0,
+        roster_hashes,
+    }
+}
+
 #[test]
 fn genesis_mismatch_detected() {
     let anchors = InMemoryAnchorStore::new();
-    anchors.check_and_update("did:mata:x", &[1u8; 32], 1).unwrap();
+    anchors.check_and_update("did:mata:x", &roster(1, &[])).unwrap();
     let err = anchors
-        .check_and_update("did:mata:x", &[2u8; 32], 2)
+        .check_and_update("did:mata:x", &roster(2, &[(2, 9)]))
         .unwrap_err();
     assert!(matches!(err, RpError::GenesisMismatch { .. }));
 }
@@ -232,13 +244,31 @@ fn genesis_mismatch_detected() {
 #[test]
 fn anchor_first_sight_records() {
     let anchors = InMemoryAnchorStore::new();
-    anchors.check_and_update("did:mata:x", &[1u8; 32], 3).unwrap();
+    anchors.check_and_update("did:mata:x", &roster(1, &[(2, 2), (3, 3)])).unwrap();
     // Higher version fine; lower rejected.
-    anchors.check_and_update("did:mata:x", &[1u8; 32], 4).unwrap();
+    anchors.check_and_update("did:mata:x", &roster(1, &[(2, 2), (3, 3), (4, 4)])).unwrap();
     let err = anchors
-        .check_and_update("did:mata:x", &[1u8; 32], 3)
+        .check_and_update("did:mata:x", &roster(1, &[(2, 2), (3, 3)]))
         .unwrap_err();
     assert!(matches!(err, RpError::Rollback { .. }));
+}
+
+/// Seen v3; a history that carries a different v3 (branched off v2) is a fork,
+/// at v3 and at any later version; the seen history continues.
+#[test]
+fn a_branched_history_is_a_fork() {
+    let anchors = InMemoryAnchorStore::new();
+    anchors.check_and_update("did:mata:x", &roster(1, &[(2, 2), (3, 3)])).unwrap();
+    for forked in [roster(1, &[(2, 2), (3, 33)]), roster(1, &[(2, 2), (3, 33), (4, 44)])] {
+        let err = anchors.check_and_update("did:mata:x", &forked).unwrap_err();
+        assert!(matches!(err, RpError::Fork { version: 3, .. }), "{err:?}");
+    }
+    anchors.check_and_update("did:mata:x", &roster(1, &[(2, 2), (3, 3), (4, 4)])).unwrap();
+    // The mark moved to v4: a history that skips it is a fork too.
+    let err = anchors
+        .check_and_update("did:mata:x", &roster(1, &[(2, 2), (3, 3), (5, 5)]))
+        .unwrap_err();
+    assert!(matches!(err, RpError::Fork { version: 4, .. }), "{err:?}");
 }
 
 // ─── Session expiry helpers ─────────────────────────────────────────────────
@@ -294,11 +324,13 @@ mod redb_store {
 
         {
             let store = RedbStore::open(&path).unwrap();
-            store.check_and_update("did:mata:x", &[7u8; 32], 5).unwrap();
+            store
+                .check_and_update("did:mata:x", &roster(7, &[(4, 4), (5, 5)]))
+                .unwrap();
         }
         let store = RedbStore::open(&path).unwrap();
         let err = store
-            .check_and_update("did:mata:x", &[7u8; 32], 4)
+            .check_and_update("did:mata:x", &roster(7, &[(4, 4)]))
             .unwrap_err();
         assert!(matches!(
             err,
@@ -310,9 +342,14 @@ mod redb_store {
         ));
         // Genesis mismatch also persists.
         let err = store
-            .check_and_update("did:mata:x", &[8u8; 32], 6)
+            .check_and_update("did:mata:x", &roster(8, &[(6, 6)]))
             .unwrap_err();
         assert!(matches!(err, RpError::GenesisMismatch { .. }));
+        // And so does the head: a branched v5 is refused after a reopen.
+        let err = store
+            .check_and_update("did:mata:x", &roster(7, &[(4, 4), (5, 55), (6, 6)]))
+            .unwrap_err();
+        assert!(matches!(err, RpError::Fork { version: 5, .. }), "{err:?}");
     }
 
     #[test]

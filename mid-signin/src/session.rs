@@ -60,6 +60,10 @@ pub struct RpSession {
     pub exp: u64,
     /// The audience the token was minted for (this RP's origin).
     pub aud: String,
+    /// `(version, hash)` of every roster the token carries, genesis first,
+    /// head last ([`mid_verify::VerifiedMid::roster_hashes`]). The anchor store
+    /// records the head and refuses a later token whose history lacks it.
+    pub roster_hashes: Vec<(u64, [u8; 32])>,
 }
 
 impl RpSession {
@@ -72,6 +76,16 @@ impl RpSession {
             iat: verified.iat,
             exp: verified.exp,
             aud: verified.aud,
+            roster_hashes: verified.roster_hashes,
+        }
+    }
+
+    /// What the anchor store checks and records for this sign-in.
+    pub fn presented_roster(&self) -> crate::PresentedRoster {
+        crate::PresentedRoster {
+            genesis_roster_hash: self.genesis_roster_hash,
+            current_version: self.current_version,
+            roster_hashes: self.roster_hashes.clone(),
         }
     }
 

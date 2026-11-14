@@ -67,8 +67,10 @@ pub mod routes;
 pub(crate) mod test_fixtures;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_roster_lifecycle;
 
-pub use anchor::{AnchorStore, InMemoryAnchorStore};
+pub use anchor::{check_against_anchor, AnchorStore, InMemoryAnchorStore, PresentedRoster};
 pub use auth::{peek_nonce, Authenticator};
 pub use error::RpError;
 pub use nonce::{InMemoryNonceStore, NonceStore, DEFAULT_MAX_LIVE_NONCES, DEFAULT_NONCE_TTL_SECS};

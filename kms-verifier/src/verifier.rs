@@ -74,6 +74,19 @@ impl Verifier {
     }
 
     /// Override the clock (tests).
+    /// The DID resolver this verifier reads rosters from.
+    ///
+    /// Exposed because verifying an assertion is not the only reason to need a DID
+    /// document. Self-service enrollment has to check a signature made by a **third**
+    /// party — the device being claimed, which is not the caller — and the roster that
+    /// says which keys speak for that device is exactly what a resolver returns. Giving
+    /// the caller its own resolver would mean two configured registry URLs that could
+    /// disagree about who a DID is, which is the sort of drift nobody notices until a
+    /// signature is rejected for reasons no log explains.
+    pub fn resolver(&self) -> &Arc<dyn DidResolver> {
+        &self.resolver
+    }
+
     pub fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
         self.clock = clock;
         self
@@ -198,8 +211,8 @@ impl Verifier {
             .as_slice()
             .try_into()
             .map_err(|_| VerifyError::SignatureInvalid)?;
-        let signature = Signature::from_slice(&sig_bytes)
-            .map_err(|_| VerifyError::SignatureInvalid)?;
+        let signature =
+            Signature::from_slice(&sig_bytes).map_err(|_| VerifyError::SignatureInvalid)?;
         // Reject high-s signatures explicitly. `normalize_s` returns Some(new)
         // if the input is high-s, in which case we reject; None if already low.
         if signature.normalize_s().is_some() {
@@ -337,4 +350,262 @@ pub struct VerifiedRosterUpdate {
     /// The new `roster_version` the store should set on success.
     /// Equals `update.new_version`.
     pub new_roster_version: u64,
+}
+
+// ── Genesis: the self-certifying bootstrap (did_document_v2.md §"Post-transition bootstrap") ──
+
+/// The DID a P-256 public key names: `did:mata:` + base58 of the 33-byte
+/// **compressed** SEC1 point. Accepts a 65-byte uncompressed or 33-byte compressed
+/// key; anything else is not a key. This is the one place the string ↔ key
+/// binding is computed, so a registry, a wallet and a verifier cannot disagree.
+pub fn did_from_pubkey_sec1(pubkey: &[u8]) -> Result<String, VerifyError> {
+    let vk = VerifyingKey::from_sec1_bytes(pubkey).map_err(|_| VerifyError::SignatureInvalid)?;
+    let compressed = vk.to_encoded_point(true);
+    Ok(format!(
+        "did:mata:{}",
+        bs58::encode(compressed.as_bytes()).into_string()
+    ))
+}
+
+/// The inverse: the genesis public key a key-derived DID *is*, as 65-byte SEC1 uncompressed.
+///
+/// Kept beside [`did_from_pubkey_sec1`] because the two are one binding read in two
+/// directions, and the string-to-key rule must live in exactly one place. A legacy
+/// `did:mata:<uuid>` carries no key and is [`VerifyError::MalformedDid`]: a caller shaped
+/// like that cannot be proven to hold any key from the DID alone, and a verifier must say
+/// so rather than guess.
+pub fn pubkey_sec1_from_did(did: &str) -> Result<Vec<u8>, VerifyError> {
+    let suffix = did.strip_prefix("did:mata:").ok_or(VerifyError::MalformedDid)?;
+    let bytes = bs58::decode(suffix).into_vec().map_err(|_| VerifyError::MalformedDid)?;
+    if bytes.len() != 33 {
+        return Err(VerifyError::MalformedDid);
+    }
+    let vk = VerifyingKey::from_sec1_bytes(&bytes).map_err(|_| VerifyError::MalformedDid)?;
+    Ok(vk.to_encoded_point(false).as_bytes().to_vec())
+}
+
+/// Verify a **genesis** roster envelope — a [`RosterUpdate`] with `prior_version == 0`
+/// and `new_version == 1` — with no prior document to consult. There is none: this
+/// is how a DID comes into existence without a Supabase JWT or any other bearer.
+///
+/// The trust comes from the DID itself. The signer must be an entry of the new
+/// roster, and that entry's public key must *derive the DID being claimed*
+/// ([`did_from_pubkey_sec1`]); the signature is then verified under that key with
+/// the same canonical bytes, low-s rule and freshness window as every other roster
+/// update. Nobody can bootstrap a DID they do not hold the key for.
+///
+/// Pure: `now_unix` is a parameter, exactly like [`Verifier::verify_roster_update`].
+pub fn verify_genesis(
+    update: &RosterUpdate,
+    now_unix: u64,
+) -> Result<VerifiedRosterUpdate, VerifyError> {
+    // 1. Shape — the same envelope, at version 0 → 1.
+    update.validate()?;
+    if update.prior_version != 0 || update.new_version != 1 {
+        return Err(VerifyError::NonMonotonicVersion);
+    }
+    if update.new_roster.is_empty() {
+        return Err(VerifyError::DeviceNotInRoster);
+    }
+
+    // 2. The signer is in the roster it is creating…
+    let signer = update
+        .new_roster
+        .iter()
+        .find(|e| e.device_id == update.signer_device_id)
+        .ok_or(VerifyError::DeviceNotInRoster)?;
+
+    // 3. …and its key IS the DID. A key-derived DID is the whole authorization.
+    if did_from_pubkey_sec1(&signer.pubkey)? != update.did {
+        return Err(VerifyError::SignatureInvalid);
+    }
+
+    // 4. Signature: low-s only, prehash over the canonical bytes.
+    let verifying_key =
+        VerifyingKey::from_sec1_bytes(&signer.pubkey).map_err(|_| VerifyError::SignatureInvalid)?;
+    let sig_bytes: [u8; 64] = update
+        .signature
+        .as_slice()
+        .try_into()
+        .map_err(|_| VerifyError::SignatureInvalid)?;
+    let signature = Signature::from_slice(&sig_bytes).map_err(|_| VerifyError::SignatureInvalid)?;
+    if signature.normalize_s().is_some() {
+        return Err(VerifyError::SignatureInvalid);
+    }
+    verifying_key
+        .verify_prehash(&update.canonical_bytes(), &signature)
+        .map_err(|_| VerifyError::SignatureInvalid)?;
+
+    // 5. Freshness — the same 300 s window a roster update gets.
+    if now_unix.abs_diff(update.signed_at) > ROSTER_SIGNED_AT_TOLERANCE_SECS {
+        return Err(VerifyError::RosterTimestampOutOfRange);
+    }
+
+    Ok(VerifiedRosterUpdate {
+        did: update.did.clone(),
+        signer_device_id: update.signer_device_id.clone(),
+        new_roster_version: update.new_version,
+    })
+}
+
+#[cfg(test)]
+mod genesis_tests {
+    use super::*;
+    use kms_types::RosterEntry;
+    use p256::ecdsa::signature::hazmat::PrehashSigner;
+    use p256::ecdsa::SigningKey;
+    use p256::elliptic_curve::rand_core::OsRng;
+
+    const NOW: u64 = 1_788_470_400;
+
+    fn device() -> (SigningKey, Vec<u8>) {
+        let key = SigningKey::random(&mut OsRng);
+        let pubkey = key
+            .verifying_key()
+            .to_encoded_point(false)
+            .as_bytes()
+            .to_vec();
+        assert_eq!(pubkey.len(), 65);
+        (key, pubkey)
+    }
+
+    fn genesis_for(key: &SigningKey, pubkey: &[u8], did: &str, signer_id: &str) -> RosterUpdate {
+        let mut u = RosterUpdate {
+            envelope_version: RosterUpdate::CURRENT_VERSION,
+            envelope_type: RosterUpdate::TYPE.to_string(),
+            did: did.to_string(),
+            prior_version: 0,
+            new_version: 1,
+            new_roster: vec![RosterEntry {
+                device_id: "dev-1".into(),
+                pubkey: pubkey.to_vec(),
+                added_at: NOW,
+                label: "laptop".into(),
+            }],
+            signed_at: NOW,
+            signer_device_id: signer_id.to_string(),
+            signature: Vec::new(),
+        };
+        let sig: Signature = key.sign_prehash(&u.canonical_bytes()).unwrap();
+        // hazmat signing does not normalize; the wallet path does, so match it here.
+        let sig = sig.normalize_s().unwrap_or(sig);
+        u.signature = sig.to_bytes().to_vec();
+        u
+    }
+
+    #[test]
+    fn a_key_derived_did_is_a_valid_base58_did() {
+        let (_, pubkey) = device();
+        let did = did_from_pubkey_sec1(&pubkey).unwrap();
+        assert!(kms_types::is_valid_did(&did), "{did}");
+        // compressed input names the same DID
+        let vk = VerifyingKey::from_sec1_bytes(&pubkey).unwrap();
+        let compressed = vk.to_encoded_point(true);
+        assert_eq!(did_from_pubkey_sec1(compressed.as_bytes()).unwrap(), did);
+        assert!(did_from_pubkey_sec1(&[4u8; 10]).is_err(), "not a key");
+    }
+
+    #[test]
+    fn a_self_signed_genesis_by_the_key_that_names_the_did_verifies() {
+        let (key, pubkey) = device();
+        let did = did_from_pubkey_sec1(&pubkey).unwrap();
+        let u = genesis_for(&key, &pubkey, &did, "dev-1");
+        let v = verify_genesis(&u, NOW + 10).unwrap();
+        assert_eq!(v.did, did);
+        assert_eq!(v.new_roster_version, 1);
+        assert_eq!(v.signer_device_id, "dev-1");
+    }
+
+    #[test]
+    fn a_did_the_key_does_not_name_is_refused() {
+        let (key, pubkey) = device();
+        let (_, other_pubkey) = device();
+        let someone_else = did_from_pubkey_sec1(&other_pubkey).unwrap();
+        // the signature is genuine, but this key does not own that DID
+        let u = genesis_for(&key, &pubkey, &someone_else, "dev-1");
+        assert!(matches!(
+            verify_genesis(&u, NOW),
+            Err(VerifyError::SignatureInvalid)
+        ));
+    }
+
+    #[test]
+    fn a_signer_outside_the_new_roster_is_refused() {
+        let (key, pubkey) = device();
+        let did = did_from_pubkey_sec1(&pubkey).unwrap();
+        let u = genesis_for(&key, &pubkey, &did, "not-in-roster");
+        assert!(matches!(
+            verify_genesis(&u, NOW),
+            Err(VerifyError::DeviceNotInRoster)
+        ));
+    }
+
+    #[test]
+    fn only_zero_to_one_is_a_genesis() {
+        let (key, pubkey) = device();
+        let did = did_from_pubkey_sec1(&pubkey).unwrap();
+        let mut u = genesis_for(&key, &pubkey, &did, "dev-1");
+        u.prior_version = 1;
+        u.new_version = 2;
+        let sig: Signature = key.sign_prehash(&u.canonical_bytes()).unwrap();
+        // hazmat signing does not normalize; the wallet path does, so match it here.
+        let sig = sig.normalize_s().unwrap_or(sig);
+        u.signature = sig.to_bytes().to_vec();
+        assert!(matches!(
+            verify_genesis(&u, NOW),
+            Err(VerifyError::NonMonotonicVersion)
+        ));
+    }
+
+    #[test]
+    fn a_tampered_or_stale_genesis_is_refused() {
+        let (key, pubkey) = device();
+        let did = did_from_pubkey_sec1(&pubkey).unwrap();
+        let mut tampered = genesis_for(&key, &pubkey, &did, "dev-1");
+        tampered.new_roster[0].label = "renamed after signing".into();
+        assert!(matches!(
+            verify_genesis(&tampered, NOW),
+            Err(VerifyError::SignatureInvalid)
+        ));
+
+        let stale = genesis_for(&key, &pubkey, &did, "dev-1");
+        assert!(matches!(
+            verify_genesis(&stale, NOW + ROSTER_SIGNED_AT_TOLERANCE_SECS + 1),
+            Err(VerifyError::RosterTimestampOutOfRange)
+        ));
+    }
+
+    #[test]
+    fn a_high_s_signature_is_refused_even_though_it_would_verify() {
+        let (key, pubkey) = device();
+        let did = did_from_pubkey_sec1(&pubkey).unwrap();
+        let mut u = genesis_for(&key, &pubkey, &did, "dev-1");
+        // flip s to its high counterpart (n - s): mathematically valid, canonically not
+        let sig = Signature::from_slice(&u.signature).unwrap();
+        let high_s = -*sig.s();
+        let high = Signature::from_scalars(sig.r().to_bytes(), high_s.to_bytes()).unwrap();
+        u.signature = high.to_bytes().to_vec();
+        assert!(matches!(
+            verify_genesis(&u, NOW),
+            Err(VerifyError::SignatureInvalid)
+        ));
+    }
+
+    /// **One binding, two directions.** A DID made from a key must give that key back,
+    /// and a DID that carries no key must say so instead of inventing one.
+    #[test]
+    fn a_key_derived_did_round_trips_to_its_key() {
+        use p256::ecdsa::SigningKey;
+        let sk = SigningKey::from_slice(&[7u8; 32]).unwrap();
+        let sec1 = sk.verifying_key().to_encoded_point(false).as_bytes().to_vec();
+        let did = did_from_pubkey_sec1(&sec1).unwrap();
+        assert_eq!(pubkey_sec1_from_did(&did).unwrap(), sec1);
+        assert!(
+            matches!(
+                pubkey_sec1_from_did("did:mata:63c58bf2-ddfe-426c-9476-2f1625bc3f12"),
+                Err(VerifyError::MalformedDid)
+            ),
+            "a legacy uuid DID carries no key"
+        );
+    }
 }

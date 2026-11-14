@@ -58,11 +58,8 @@ impl Authenticator {
         {
             return Err(RpError::NonceRejected);
         }
-        self.anchors.check_and_update(
-            &session.did,
-            &session.genesis_roster_hash,
-            session.current_version,
-        )?;
+        self.anchors
+            .check_and_update(&session.did, &session.presented_roster())?;
         Ok(session)
     }
 

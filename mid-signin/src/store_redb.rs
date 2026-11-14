@@ -7,7 +7,7 @@ use std::path::Path;
 
 use redb::{Database, ReadableTable, ReadableTableMetadata, TableDefinition};
 
-use crate::anchor::AnchorStore;
+use crate::anchor::{check_against_anchor, AnchorStore, PresentedRoster};
 use crate::error::RpError;
 use crate::nonce::{fresh_nonce, NonceStore, DEFAULT_MAX_LIVE_NONCES, DEFAULT_NONCE_TTL_SECS};
 
@@ -115,12 +115,7 @@ impl NonceStore for RedbStore {
 }
 
 impl AnchorStore for RedbStore {
-    fn check_and_update(
-        &self,
-        did: &str,
-        genesis_roster_hash: &[u8; 32],
-        current_version: u64,
-    ) -> Result<(), RpError> {
+    fn check_and_update(&self, did: &str, presented: &PresentedRoster) -> Result<(), RpError> {
         let txn = self.db.begin_write().map_err(store_err)?;
         {
             let mut table = txn.open_table(ANCHORS).map_err(store_err)?;
@@ -129,24 +124,14 @@ impl AnchorStore for RedbStore {
                 .map_err(store_err)?
                 .map(|guard| decode_anchor(guard.value()))
                 .transpose()?;
-            match existing {
-                Some((anchored_hash, last_seen_version)) => {
-                    if &anchored_hash != genesis_roster_hash {
-                        return Err(RpError::GenesisMismatch {
-                            did: did.to_owned(),
-                        });
-                    }
-                    if current_version < last_seen_version {
-                        return Err(RpError::Rollback {
-                            did: did.to_owned(),
-                            presented: current_version,
-                            last_seen: last_seen_version,
-                        });
-                    }
-                }
-                None => {}
+            if let Some((anchored_hash, last_seen_version, last_seen_head)) = existing {
+                check_against_anchor(did, &anchored_hash, last_seen_version, last_seen_head, presented)?;
             }
-            let encoded = encode_anchor(genesis_roster_hash, current_version);
+            let encoded = encode_anchor(
+                &presented.genesis_roster_hash,
+                presented.current_version,
+                &presented.head_hash(),
+            );
             table
                 .insert(did, encoded.as_slice())
                 .map_err(store_err)?;
@@ -156,27 +141,52 @@ impl AnchorStore for RedbStore {
     }
 }
 
-fn encode_anchor(genesis_roster_hash: &[u8; 32], version: u64) -> [u8; 40] {
-    let mut out = [0u8; 40];
+/// genesis hash (32) ‖ version (8, big-endian) ‖ head roster hash (32).
+fn encode_anchor(genesis_roster_hash: &[u8; 32], version: u64, head: &[u8; 32]) -> [u8; 72] {
+    let mut out = [0u8; 72];
     out[..32].copy_from_slice(genesis_roster_hash);
-    out[32..].copy_from_slice(&version.to_be_bytes());
+    out[32..40].copy_from_slice(&version.to_be_bytes());
+    out[40..].copy_from_slice(head);
     out
 }
 
-fn decode_anchor(bytes: &[u8]) -> Result<([u8; 32], u64), RpError> {
-    if bytes.len() != 40 {
+/// Reads the 72-byte record, and the 40-byte one written before heads were
+/// kept (its head is `None` until the next sign-in rewrites it).
+fn decode_anchor(bytes: &[u8]) -> Result<([u8; 32], u64, Option<[u8; 32]>), RpError> {
+    if bytes.len() != 40 && bytes.len() != 72 {
         return Err(RpError::Store(format!(
-            "corrupt anchor record: {} bytes, expected 40",
+            "corrupt anchor record: {} bytes, expected 72 (or 40 from before heads)",
             bytes.len()
         )));
     }
     let mut hash = [0u8; 32];
     hash.copy_from_slice(&bytes[..32]);
     let mut version_bytes = [0u8; 8];
-    version_bytes.copy_from_slice(&bytes[32..]);
-    Ok((hash, u64::from_be_bytes(version_bytes)))
+    version_bytes.copy_from_slice(&bytes[32..40]);
+    let head = (bytes.len() == 72).then(|| {
+        let mut head = [0u8; 32];
+        head.copy_from_slice(&bytes[40..]);
+        head
+    });
+    Ok((hash, u64::from_be_bytes(version_bytes), head))
 }
 
 fn store_err(e: impl std::fmt::Display) -> RpError {
     RpError::Store(e.to_string())
+}
+
+#[cfg(test)]
+mod anchor_record_tests {
+    use super::*;
+
+    #[test]
+    fn a_record_from_before_heads_still_reads() {
+        let mut old = [0u8; 40];
+        old[..32].copy_from_slice(&[3u8; 32]);
+        old[32..].copy_from_slice(&9u64.to_be_bytes());
+        assert_eq!(decode_anchor(&old).unwrap(), ([3u8; 32], 9, None));
+        let new = encode_anchor(&[3u8; 32], 9, &[4u8; 32]);
+        assert_eq!(decode_anchor(&new).unwrap(), ([3u8; 32], 9, Some([4u8; 32])));
+        assert!(decode_anchor(&[0u8; 41]).is_err());
+    }
 }

@@ -53,6 +53,16 @@ pub enum RpError {
     },
 
     /// The session has passed its expiry.
+    /// The token's roster history does not contain the roster this RP saw
+    /// last at `version`: a history branched off an older roster (for example
+    /// by a device removed later, which was listed in an earlier version).
+    #[error("roster fork for DID {did}: this history differs from the one seen at version {version}")]
+    Fork {
+        /// The DID whose history forked.
+        did: String,
+        /// The recorded version whose roster this token does not carry.
+        version: u64,
+    },
     #[error("session expired: exp={exp}, now={now}")]
     SessionExpired {
         /// The session's `exp`, Unix seconds.
@@ -78,6 +88,7 @@ impl RpError {
             RpError::NonceCapacity { .. } => "nonce_capacity",
             RpError::GenesisMismatch { .. } => "genesis_mismatch",
             RpError::Rollback { .. } => "rollback_detected",
+            RpError::Fork { .. } => "roster_fork",
             RpError::SessionExpired { .. } => "session_expired",
             RpError::Store(_) => "store_failure",
         }
