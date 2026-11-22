@@ -38,10 +38,12 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+#[cfg(feature = "http")]
 mod client;
 mod sign;
 mod signer;
 
+#[cfg(feature = "http")]
 pub use client::{ClientError, KmsClient};
 pub use sign::{sign_assertion, sign_roster_update};
 pub use signer::{DeviceSigner, InMemoryDeviceSigner};

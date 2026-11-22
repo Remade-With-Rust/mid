@@ -20,7 +20,9 @@ kms-types = { path = "../kms-types", version = "0.2.0" }
 # signing key is platform-specific (Secure Enclave on iOS, StrongBox on
 # Android, vault-loaded software key in the extension) and lives in
 # packages/ui. This crate only depends on the trait, never the impl.
-kms-client = { path = "../kms-client", version = "0.2.0" }
+# Only the `DeviceSigner` trait is used here: the KMS HTTP client (and the C TLS stack it
+# brings natively) stays off.
+kms-client = { path = "../kms-client", version = "0.2.0", default-features = false }
 
 # JSON serialization. The mID JWT payload is JSON-based per RFC 7519.
 serde = { version = "1", features = ["derive"] }
